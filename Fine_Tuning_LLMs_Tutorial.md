@@ -368,9 +368,17 @@ assert torch.cuda.is_available(), "No GPU! Runtime -> Change runtime type -> T4 
 
 gpu   = torch.cuda.get_device_name(0)
 vram  = torch.cuda.get_device_properties(0).total_memory / 1e9
-BF16  = torch.cuda.is_bf16_supported()   # False on T4 (Turing); True on Ampere+ (A100, L4, ...)
+cc    = torch.cuda.get_device_capability()
 
-print(f"GPU             : {gpu} ({vram:.1f} GB)")
+# Real bf16 needs Ampere+ (compute capability 8.0+), which is exactly the check transformers
+# performs. Do NOT use torch.cuda.is_bf16_supported() here: it defaults to
+# including_emulation=True, and on a T4 it falls through to "can I allocate a bf16 tensor?"
+# — which Turing can, in software. So it returns True on a T4, you set bf16=True, and the
+# run dies much later inside SFTConfig with a confusing
+# "Your setup doesn't support bf16/gpu" ValueError.
+BF16  = cc[0] >= 8
+
+print(f"GPU             : {gpu} ({vram:.1f} GB, compute capability {cc[0]}.{cc[1]})")
 print(f"bfloat16 support: {BF16}   -> we will train in {'bf16' if BF16 else 'fp16'}")
 print(f"Python          : {platform.python_version()} | torch {torch.__version__}")
 
@@ -386,7 +394,7 @@ assert V("0.20") <= V(trl.__version__) <= V("0.24.0"), (
 )
 ```
 
-> **Precision trap.** A T4 is Turing architecture and does **not** support bfloat16. Hard-coding `bf16=True` — which many tutorials do, because their authors were on an A100 — will fail or silently degrade on the free tier. We compute `BF16` once here and use it everywhere. This is the single most common "but it worked in the tutorial" failure on Colab.
+> **Precision trap — and it is subtler than it looks.** A T4 is Turing architecture and has no *native* bfloat16, so hard-coding `bf16=True` — which many tutorials do, because their authors were on an A100 — fails on the free tier. That much is well known. The trap is that the obvious guard **does not work**: `torch.cuda.is_bf16_supported()` takes `including_emulation=True` by default, and when the hardware check fails it falls back to simply trying to allocate a bfloat16 tensor. Turing can do that in software, so the function returns `True` on a T4. Meanwhile `transformers` gates on compute capability ≥ 8.0. The two disagree, and the disagreement does not surface at Cell 2 where you would notice it — it surfaces several cells later, when `SFTConfig` is constructed, as `ValueError: Your setup doesn't support bf16/gpu`. Gate on the compute capability directly, as above, and the two agree by construction.
 
 ---
 
@@ -515,17 +523,27 @@ print(f"[compat] trl {trl.__version__}: passing the tokenizer as '{TOKENIZER_KW}
 
 ```python
 # Cell 6 — supervised fine-tuning with TRL's SFTTrainer
+import math
+
+BATCH, ACCUM, EPOCHS = 2, 4, 1        # effective batch = BATCH x ACCUM = 8
+
+# transformers 5.x deprecates warmup_ratio (removal in 5.2), so derive the step count
+# ourselves and keep the same ~3% warmup the tutorial describes in section 9.
+TOTAL_STEPS  = math.ceil(len(train_ds) / (BATCH * ACCUM)) * EPOCHS
+WARMUP_STEPS = max(5, round(0.03 * TOTAL_STEPS))
+print(f"~{TOTAL_STEPS} optimizer steps, {WARMUP_STEPS} of them warmup")
+
 cfg = make_sft_config(
     output_dir                  = "outputs",
     dataset_text_field          = "text",
     max_length                  = MAX_SEQ_LEN,   # 'max_seq_length' on TRL < 0.20 (shim handles it)
 
-    per_device_train_batch_size = 2,     # rows per GPU step
-    gradient_accumulation_steps = 4,     # -> effective batch = 2 x 4 = 8
-    num_train_epochs            = 1,     # 1 epoch is enough for a demo
-    learning_rate               = 2e-4,  # typical for LoRA/QLoRA
+    per_device_train_batch_size = BATCH,   # rows per GPU step
+    gradient_accumulation_steps = ACCUM,   # -> effective batch = 8
+    num_train_epochs            = EPOCHS,  # 1 epoch is enough for a demo
+    learning_rate               = 2e-4,    # typical for LoRA/QLoRA
     lr_scheduler_type           = "cosine",
-    warmup_ratio                = 0.03,
+    warmup_steps                = WARMUP_STEPS,
     weight_decay                = 0.01,
     max_grad_norm               = 1.0,
     optim                       = "paged_adamw_8bit",
@@ -651,7 +669,7 @@ Expect the reported loss to **jump** when you enable this — that is correct an
 | `gradient_accumulation_steps` | Steps to accumulate before updating | Simulates a large batch on a small GPU. **Effective batch = batch × accum × #GPUs.** Costs time, not memory. |
 | `num_train_epochs` | Full passes over the data | Small datasets overfit fast — **1–3** is usually right. Let validation loss decide. |
 | `max_length` | Tokens per training sequence | Longer = more memory (attention cost grows ~quadratically). 1024–2048 is typical. Check your data's actual length distribution before paying for 2048. |
-| `warmup_ratio` | Fraction of steps ramping the LR up | 0.03 is a safe default; prevents a large destabilizing first update. |
+| `warmup_steps` | Number of steps ramping the LR up | Target ~3% of total steps; prevents a large destabilizing first update. (`warmup_ratio` did this as a fraction, but transformers 5.x deprecates it — removal in 5.2.) |
 | `lr_scheduler_type` | LR decay shape | `cosine` or `linear`; the difference is minor at this scale. |
 | `weight_decay` | L2-style regularization | 0.01 is standard. |
 | `max_grad_norm` | Gradient clipping cap | 1.0 — cheap insurance against loss spikes. |
@@ -896,7 +914,8 @@ FastLanguageModel.for_inference(model)
 | `TypeError: ... unexpected keyword argument 'tokenizer'` | TRL ≥ 0.16 | Use `processing_class=` (Cell 5 handles this) |
 | `TypeError: ... 'max_seq_length'` | TRL ≥ 0.20 | Use `max_length=` in `SFTConfig` |
 | `TypeError: ... 'dataset_text_field'` on `SFTTrainer` | Moved to config | Put it in `SFTConfig`, not the trainer |
-| `RuntimeError: ... bf16 ... not supported` | T4 has no bfloat16 | `fp16=True, bf16=False` (Cell 2 detects this) |
+| `ValueError: Your setup doesn't support bf16/gpu ... You need Ampere+ GPU` | You set `bf16=True` on a pre-Ampere GPU — most likely because `torch.cuda.is_bf16_supported()` counts *emulated* bf16 and returns `True` on a T4 | Gate on `torch.cuda.get_device_capability()[0] >= 8` instead (Cell 2 does this); see the precision-trap note in §7.4 |
+| `warmup_ratio is deprecated ... use warmup_steps` | transformers 5.x deprecation, removal in 5.2 | Pass `warmup_steps` (Cell 6 derives it as ~3% of total steps) |
 | `CUDA out of memory` | Batch/seq too large | Lower `per_device_train_batch_size` to 1, raise `gradient_accumulation_steps`, lower `max_length` to 1024, confirm gradient checkpointing is on |
 | Generation never stops | EOS token not learned or not set | Verify the template ends the assistant turn; set `eos_token_id` in `generate()` |
 | Output contains `<|im_start|>` literals | Template mismatch between train and inference | Use `apply_chat_template` with `add_generation_prompt=True` at inference |
@@ -963,7 +982,7 @@ from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 import torch
 
 model_id = "Qwen/Qwen2.5-1.5B-Instruct"
-BF16 = torch.cuda.is_bf16_supported()
+BF16 = torch.cuda.get_device_capability()[0] >= 8   # see 7.4 — NOT is_bf16_supported()
 
 # 1) 4-bit quantization config — this is the "Q" in QLoRA
 bnb = BitsAndBytesConfig(
@@ -1012,6 +1031,7 @@ The renames that break older SFT code, so you can read any tutorial you find and
 | Training args class | `TrainingArguments` | `SFTConfig` (subclasses it) |
 | Response-only loss | `DataCollatorForCompletionOnlyLM` | `SFTConfig(assistant_only_loss=True)` or `completion_only_loss=True` |
 | Eval cadence | `evaluation_strategy=` | `eval_strategy=` |
+| LR warmup | `warmup_ratio=0.03` | `warmup_steps=N` (transformers 5.x deprecation, removal in 5.2) |
 
 **How to check for yourself, in any version:**
 
