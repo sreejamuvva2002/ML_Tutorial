@@ -17,6 +17,7 @@
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
 | `finetuning_tutorial.ipynb` | Runnable code | The same code as an executable Colab/Jupyter notebook |
+| `finetuning_tutorial_executed.ipynb` | Evidence | A complete run with all outputs and the loss curve (results in §11.5) |
 | `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
 | `presentation.mp4` *(optional)* | Recording | ~10-minute walkthrough (see §15 for the outline) |
 
@@ -69,7 +70,7 @@
 |---|---|
 | Install libraries | 2–5 min |
 | Download + quantize the 1.5B model | 1–3 min |
-| Train (2,000 examples, 1 epoch) | 10–25 min |
+| Train (2,000 examples, 1 epoch) | 9–25 min (measured: 9.4 min — §11.5) |
 | Evaluate + generate | 3–5 min |
 
 Training time varies a lot with sequence length and how busy Colab's backend is. If you are short on time, drop the dataset slice to 500 examples — every concept in this tutorial still applies.
@@ -260,9 +261,15 @@ Note that even a 1.5B model cannot be fully fine-tuned on a free T4 — and that
 | Base weights in 4-bit (~0.5 bytes/param) | ~0.8 GB | ~3.5 GB |
 | LoRA adapters + their gradients + optimizer state | ~0.2 GB | ~0.9 GB |
 | Activations (batch 2, seq 2048, with gradient checkpointing) | ~1–3 GB | ~3–6 GB |
-| **Approximate total** | **~2–4 GB** | **~7–11 GB** |
+| **Approximate total** | **~2–4.5 GB** | **~7–11 GB** |
 
 Both fit on a free T4. That is the entire reason this tutorial is runnable in a classroom setting.
+
+> **Measured.** A real run of §8 on a T4 peaked at **4.06 GB** (§11.5). The first version of this
+> table predicted 2–4 GB, so the estimate was close but its upper bound was slightly low — which is
+> the normal outcome for activation estimates, since they depend on the actual token-length
+> distribution of your data rather than on `max_length`. Treat the range as a planning figure with
+> ~25% headroom, not a guarantee.
 
 ### 6.3 How many parameters does LoRA actually train?
 
@@ -827,10 +834,18 @@ for p in PROMPTS:
 
 **Score these by hand.** For a class deliverable this manual table is stronger evidence than any automatic metric:
 
-| Prompt | Format ✓/✗ | Followed instruction ✓/✗ | Factually OK ✓/✗ | Better than base? |
-|---|---|---|---|---|
-| 1 | | | | |
-| … | | | | |
+Scored from the run recorded in §11.5:
+
+| # | Prompt | Format | Followed instruction | Factually OK | Better than base? |
+|---|---|---|---|---|---|
+| 1 | Three tips for clear code | ✓ | ✓ | ✓ | **≈ no change** — same three points, tuned version wordier |
+| 2 | Water cycle in two sentences | ✓ | ✗ *(both produced one sentence)* | ✓ | **≈ no change** |
+| 3 | Convert to a bulleted list | ✓ | ✓ | ✓ | **✗ worse** — base gave `- Milk`; tuned gave `- We need milk.` |
+| 4 | Capital of Australia | ✓ | ✓ | ✓ | **= unchanged** — both answered Canberra |
+| 5 | Polite email declining | ✓ | ✓ | n/a | **✗ slightly worse** — base included a subject line; tuned dropped it and rambled |
+
+Note that prompt 2 is failed by *both* models, which is useful: it isolates a weakness of the base
+model that fine-tuning on this data did nothing to fix.
 
 Note prompt 4 deliberately tests a **fact**, not a behavior. If the fine-tuned model gets it right and the base model does too, fine-tuning neither helped nor hurt — which is the expected and correct result, and it reinforces §3: fine-tuning is not a knowledge-injection tool.
 
@@ -858,6 +873,85 @@ print(rouge.compute(predictions=preds, references=refs))
 Fine-tuning can degrade general ability while improving your target task. To check, run a standard benchmark **before and after** with the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) — MMLU for knowledge, GSM8K for arithmetic reasoning, ARC for science QA. A few points of drop on a narrow fine-tune is normal; a large drop means your learning rate is too high, you trained too long, or your data is too narrow.
 
 > **Frameworks worth knowing:** `evaluate` (ROUGE/BLEU/BERTScore/EM), **lm-evaluation-harness** (standardized benchmarks), and **DeepEval** (pytest-style LLM tests with an LLM-as-judge). Treat LLM-as-judge scores as a *secondary* signal — judges have known biases toward length, verbosity, and their own family of models.
+
+### 11.5 Results from an actual run
+
+Everything below comes from one complete execution of §8–§12 on a free Colab T4 on 2026-07-27.
+The executed notebook, outputs and loss curve included, is `finetuning_tutorial_executed.ipynb`.
+
+**Environment**
+
+| | |
+|---|---|
+| GPU | Tesla T4, 15.6 GB, compute capability 7.5 → fp16 |
+| Python / torch | 3.12.13 / 2.11.0+cu128 |
+| Libraries | unsloth 2026.7.5, trl 0.24.0, transformers 5.5.0, peft 0.19.1 |
+| Seed | 3407 |
+| Data | `yahma/alpaca-cleaned`, `train[:2000]` → 1,700 train / 300 eval |
+| LoRA | `r=16`, `alpha=32`, `dropout=0.05`, all seven projections |
+| Schedule | effective batch 8 (2 × 4), 1 epoch = 213 steps, lr 2e-4 cosine, 6 warmup steps |
+
+Note that `trl` and `transformers` resolved to **exactly** the ceilings §7.2 derives from Unsloth's
+metadata — 0.24.0 and 5.5.0. That is the version analysis confirming itself against a real
+resolver, and it is why the retired `trl>=1.0,<2.0` pin could never have installed.
+
+**Predictions vs. measurements**
+
+| Quantity | Predicted | Measured | |
+|---|---|---|---|
+| LoRA trainable parameters (§6.3) | 18,464,768 | 18,464,768 (1.1820%) | exact |
+| Peak VRAM (§6.2) | ~2–4 GB | **4.06 GB** of 15.6 | slightly over |
+| Training time (§1) | 10–25 min | **9.4 min** | faster |
+
+The parameter arithmetic landed to the digit, which is the check §6.3 asks you to perform. The
+memory estimate was ~1.5% low at the top of its range; §6.2 has been widened accordingly.
+
+**Metrics**
+
+| Metric | Value |
+|---|---|
+| Best validation loss | **1.0211** (step 213) |
+| Perplexity | **2.78** |
+| ROUGE-1 / ROUGE-2 / ROUGE-L | **0.525 / 0.306 / 0.401** (n=25, held out) |
+
+**The model was still improving when training stopped.** Best validation loss occurred at step 213
+— the *final* step — so nothing here is overfitting. This run is **underfitting**, and per §10.2 the
+remedy is more epochs, not more regularization. `load_best_model_at_end` therefore restored the last
+checkpoint; the mechanism was correct but had nothing to rescue.
+
+#### The headline result: fine-tuning did not help, and slightly hurt
+
+The §11.2 rubric table tells an uncomfortable story. Across five prompts the fine-tuned model was
+never clearly better, was indistinguishable on three, and was **worse on two** — most visibly here:
+
+| | Output for *"Convert this to a bulleted list: we need milk, eggs, and bread."* |
+|---|---|
+| **Base** | `- Milk` / `- Eggs` / `- Bread` |
+| **Fine-tuned** | `- We need milk.` / `- We need eggs.` / `- We need bread.` |
+
+This is not a failed experiment; it is the experiment working and telling you something true.
+**Qwen2.5-1.5B-Instruct is already instruction-tuned**, and Alpaca is an older dataset distilled
+from a weaker, GPT-3-era teacher. Fine-tuning a strong instruction model on a weaker instruction
+dataset teaches it to imitate the weaker one. The loss went down — the model got better at
+predicting *Alpaca's* tokens — while the qualities a human cares about got slightly worse. That gap
+is precisely §10.3 and §11's opening warning: a falling loss is not evidence of a better model.
+
+Prompt 4 (capital of Australia) was unchanged, both models answering correctly — exactly the
+outcome §11.2 predicts and a direct restatement of §3's thesis that fine-tuning is not a
+knowledge-injection tool.
+
+**What to do differently.** Fine-tune the **base** checkpoint, `unsloth/Qwen2.5-1.5B` without
+`-Instruct`, which has no instruction-following behavior to lose and therefore has something to
+gain from SFT. Alternatively keep the Instruct model and train on data of higher quality than its
+existing tuning — which is a much harder bar than it sounds, and is the real lesson: **for an
+already-aligned model, your data has to beat what it was already trained on, or you will move
+backwards.**
+
+> **A caveat on this run's own numbers.** The training report printed `Evals recorded: 7`. Only 4–5
+> of those came from the `eval_steps=50` cadence; the remainder are duplicate entries at step 213
+> logged by standalone `trainer.evaluate()` calls that computed successfully before failing in the
+> notebook display callback (§13.2). They carry identical values, so the loss curve is unaffected,
+> but the count is not a count of independent evaluations. Report 4.
 
 ---
 
