@@ -17,7 +17,8 @@
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
 | `finetuning_tutorial.ipynb` | Runnable code | The full experiment: two datasets, base-vs-tuned evaluation, structured-JSON metrics, and the §11.6 challenge set |
-| `finetuning_tutorial_executed.ipynb` | Evidence | The final run, fully executed, with all cell outputs, metrics, and the loss curve (§11.5–§11.6) |
+| `finetuning_tutorial_executed_run2.ipynb` | Evidence | The final run, fully executed, with all cell outputs, metrics, and the loss curve (§11.5–§11.6) |
+| `finetuning_tutorial_executed_run1.ipynb` | Evidence | The earlier Alpaca-only run on a T4 — the negative result reported as Run 1 in §11.5. Preserved as-run, including the `trainer.evaluate()` failure documented in §13.2 that prompted the Cell 7 rewrite |
 | `results/` | Evidence | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example base-vs-tuned prediction logs |
 | `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
 | `presentation.mp4` *(optional)* | Recording | ~10-minute walkthrough (see §15 for the outline) |
@@ -922,7 +923,7 @@ earlier Alpaca-only experiment (the negative result). Run 2 is the final experim
 the accompanying notebook, and the numbers below come from that complete, executed run.
 
 > **These are final numbers from a clean end-to-end run.** Run 2 and the §11.6 challenge tables
-> were regenerated from the executed notebook (`finetuning_tutorial_executed.ipynb`, all outputs
+> were regenerated from the executed notebook (`finetuning_tutorial_executed_run2.ipynb`, all outputs
 > saved under `results/`): the Alpaca ROUGE sample is the full 100 examples, the challenge set
 > is 48 records, and the `strict_json_only_rate` metric is included.
 >

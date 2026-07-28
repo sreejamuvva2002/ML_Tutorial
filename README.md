@@ -1,9 +1,9 @@
 # Fine-Tuning Large Language Models: LoRA and QLoRA
 
-A hands-on tutorial that fine-tunes **Qwen2.5-1.5B-Instruct** on a slice of the public
-Alpaca-cleaned instruction dataset using **QLoRA** — a frozen 4-bit base model with small
-trainable low-rank adapters on top — and evaluates the result against its own un-tuned
-baseline. Everything runs end to end on a **single free Google Colab T4 GPU (16 GB)**. No paid
+A hands-on tutorial that fine-tunes **Qwen2.5-1.5B-Instruct** with **QLoRA** — a frozen 4-bit base
+model with small trainable low-rank adapters on top — on a mixture of general instruction data and
+a deterministic structured-extraction task, and evaluates the result against its own un-tuned
+baseline on both. Runs end to end on a **single free Google Colab T4 GPU (16 GB)**. No paid
 compute, no API keys, no private data.
 
 Course tutorial submission — ARTI 4555/6555, MS in Artificial Intelligence.
@@ -14,97 +14,110 @@ Author: Sreeja Muvva.
 | File | Purpose |
 |---|---|
 | [`Fine_Tuning_LLMs_Tutorial.md`](Fine_Tuning_LLMs_Tutorial.md) | The written tutorial: concepts, code, interpretation, exercises |
-| [`finetuning_tutorial.ipynb`](finetuning_tutorial.ipynb) | The same code as an executable Colab/Jupyter notebook |
-| [`finetuning_tutorial_executed.ipynb`](finetuning_tutorial_executed.ipynb) | A complete run on a T4 with all outputs and the loss curve |
+| [`finetuning_tutorial.ipynb`](finetuning_tutorial.ipynb) | The runnable experiment |
+| [`finetuning_tutorial_executed_run2.ipynb`](finetuning_tutorial_executed_run2.ipynb) | The final run, fully executed, all outputs saved |
+| [`finetuning_tutorial_executed_run1.ipynb`](finetuning_tutorial_executed_run1.ipynb) | The earlier Alpaca-only run (the negative result) |
+| `results/` | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example prediction logs |
 | `requirements.txt` | Pinned dependencies for local (non-Colab) runs |
+
+The written tutorial's §8 is a minimal teaching path; the notebook implements the stricter
+experiment the results come from. §8 states the differences explicitly.
 
 ## Results
 
-One full run on a free Colab T4 (2026-07-27, `unsloth 2026.7.5 / trl 0.24.0 / transformers 5.5.0`),
-written up in §11.5 of the tutorial:
+Two runs, and the pair is the finding. Full write-up in §11.5–§11.6.
 
-| | |
-|---|---|
-| LoRA trainable parameters | 18,464,768 (1.18%) — matches the §6.3 hand calculation exactly |
-| Peak VRAM | 4.06 GB of 15.6 GB |
-| Training time | 9.4 min (1,700 examples, 1 epoch, 213 steps) |
-| Best validation loss / perplexity | 1.0211 / 2.78 |
-| ROUGE-1 / 2 / L on held-out data | 0.525 / 0.306 / 0.401 |
+### Run 1 — general instruction data only (Tesla T4)
 
-The finding was negative: **fine-tuning did not improve the model and slightly degraded output
-formatting.** Qwen2.5-1.5B-Instruct is already instruction-tuned, and Alpaca is an older dataset
-distilled from a weaker teacher — so SFT taught a strong model to imitate a worse one. The loss
-fell while human-visible quality did not improve, which is the tutorial's own §10.3 warning
-demonstrated on real output.
+Fine-tuned on Alpaca alone. Peak VRAM 4.06 GB, 9.4 min, best validation loss 1.0211.
 
-**Run 2 — structured task with general replay**
+**The result was negative.** Across five prompts the tuned model was never clearly better and was
+worse on two, most visibly turning `- Milk` into `- We need milk.` Qwen2.5-1.5B-**Instruct** is
+already instruction-tuned and Alpaca is distilled from a weaker teacher, so SFT taught a strong
+model to imitate a worse one. Validation loss fell while human-visible quality did not improve.
 
-Run 2 changed the experiment rather than the hyperparameters, adding a deterministic
-company-record → JSON task with exact gold answers and evaluating *both* model conditions:
+### Run 2 — structured task with general replay (RTX A5000)
 
-| Metric (60 held-out) | Base | Tuned |
+Changed the experiment rather than the hyperparameters: added a deterministic company-record → JSON
+task with exact field-level gold answers, mixed with general Alpaca data, and evaluated **both**
+model conditions on untouched test splits. 5.1 min, peak 2.19 GB, validation loss 0.8013.
+
+**In-distribution structured test (n=60)**
+
+| Metric | Base | Tuned |
 |---|---|---|
-| All fields exactly correct | 0.717 | 1.000 |
-| City accuracy | 0.783 | 1.000 |
-| Held-out Alpaca ROUGE-1 | 0.374 | 0.401 |
+| Strict JSON-only rate | 0.000 | **1.000** |
+| All fields exactly correct | 0.750 | **1.000** |
+| City accuracy | 0.800 | **1.000** |
 
-Together the two runs make the point: fine-tuning did nothing when there was no clearly defined
-missing capability, and produced a large, exactly-measurable gain once there was one.
+**Surface-form challenge set (n=48)** — same task and schema, six unseen record templates, unseen
+cities and company names, distractor sentences, unfamiliar number and certification phrasings.
 
-**Scope of these claims.** A perfect score on 60 examples is perfect performance on those 60
-examples, not a solved task — which is why the notebook now includes an out-of-distribution
-challenge set (§11.6) whose in-distribution-minus-challenge gap separates genuine extraction from
-template memorisation. The modest ROUGE change shows no degradation appeared on the sampled data;
-it is not evidence that general capability was preserved, and the replay/no-replay ablation needed
-to establish causation has not been run. See §11.5 for the full list of what these numbers do and
-do not support.
+| Metric | Base | Tuned |
+|---|---|---|
+| All fields exactly correct | 0.438 | **0.562** |
+| Supply-chain role accuracy | 0.458 | 0.583 |
+| Strict JSON-only rate | 0.000 | **1.000** |
 
-The notebook's code cells are extracted verbatim from the written document, so the two cannot
-drift apart.
+**Held-out general instruction data (ROUGE, n=100):** ROUGE-1 0.4115 → 0.4549, ROUGE-2 0.1787 →
+0.2170, ROUGE-L 0.2857 → 0.3326. No regression.
+
+### What this does and does not show
+
+Fine-tuning did nothing when there was no clearly defined missing capability, and produced a large,
+exactly-measurable gain once there was one. But read the challenge set before concluding the task
+was solved:
+
+- **A perfect in-distribution score is not a solved task.** The same adapter scores 1.000 on
+  records drawn from the training templates and 0.562 on records whose *shape* it has not seen.
+- **Part of that drop is the task, not the adapter.** The base model also falls, 0.750 → 0.438, so
+  only the excess of the tuned gap over the base gap (0.4375 − 0.3125 = 0.125) is attributable to
+  template dependence.
+- **The challenge gain is concentrated in one format.** Per-template, the entire improvement comes
+  from the Q&A layout (0.125 → 0.875); the bullet-list format scores 0.000 for both models.
+- **Almost every remaining failure is one field.** 20 of 21 tuned challenge failures are
+  `supply_chain_role` — a closed-set label, unlike the literal spans the model extracts perfectly.
+- **The intervals overlap.** 95% Wilson at n=48: base [0.307, 0.577], tuned [0.423, 0.693]. The
+  +0.125 out-of-distribution gain is suggestive, not established.
+- ROUGE stability shows no degradation appeared on the sampled data — not that general capability
+  was preserved. The replay ablation needed to establish causation has not been run.
 
 ## Quickstart (Colab)
 
 1. Open `finetuning_tutorial.ipynb` in Google Colab.
-2. **Runtime → Change runtime type → T4 GPU.** This matters: the notebook needs a GPU, and it
-   detects that a T4 has no bfloat16 support and trains in fp16 instead.
-3. Run the cells in order.
+2. **Runtime → Change runtime type → T4 GPU.** The notebook detects that a T4 has no hardware
+   bfloat16 and selects fp16 — see the precision trap in §7.4, which is subtler than it looks.
+3. Run every cell in order from a fresh runtime.
 
-Rough timings on a free T4:
+Expect roughly 35–45 minutes: about 5–9 minutes of training, and the rest generation, since every
+evaluation prompt is generated twice, once per model condition.
 
-| Step | Time |
-|---|---|
-| Install libraries | 2–5 min |
-| Download + quantize the 1.5B model | 1–3 min |
-| Train (2,000 examples, 1 epoch) | 10–25 min |
-| Evaluate + generate | 3–5 min |
-
-Short on time? Drop the dataset slice from 2,000 to 500 examples in cell 4 — every concept
-still applies.
+To shorten it, lower `ALPACA_EXAMPLES` and `STRUCTURED_EXAMPLES` in the configuration cell — every
+concept still applies.
 
 ## Running locally
 
-Any NVIDIA GPU with ≥8 GB VRAM works. Install PyTorch for your CUDA version first (Colab
-provides it already), then:
+Any NVIDIA GPU with ≥8 GB VRAM works. Install PyTorch for your CUDA version first (Colab provides
+it already), then:
 
 ```bash
 pip install -r requirements.txt
 ```
 
+Peak VRAM does not transfer across hardware — the same configuration measured 6.17 GB on a T4 and
+2.19 GB on an A5000. Budget headroom accordingly; §6.2 tabulates all three measurements.
+
 ## A note on library versions
 
-This ecosystem makes breaking changes every few months, and version drift is the single most
-common reason a fine-tuning tutorial fails to run.
+Version drift is the single most common reason a fine-tuning tutorial fails to run.
 
-The important subtlety, covered in §7.2 of the tutorial: **"latest" is not the version you
-want.** As of July 2026 the newest TRL on PyPI is 0.29.1, but Unsloth's package metadata
-requires `trl<=0.24.0`; likewise `transformers` is at 5.14.1 while Unsloth supports `<=5.5.0`.
-Installing the latest of everything produces a resolver conflict or a subtly broken
-environment. The pins in cell 1 and in `requirements.txt` sit inside Unsloth's supported
-window, cell 2 asserts the resolved versions, and cell 5 detects the installed API at runtime
-so the notebook survives the next rename.
+The subtlety, covered in §7.2: **"latest" is not the version you want.** As of July 2026 the newest
+TRL on PyPI is 0.29.1, but Unsloth's metadata requires `trl<=0.24.0`; likewise `transformers` is at
+5.14.1 while Unsloth supports `<=5.5.0`. Installing the latest of everything produces a resolver
+conflict or a subtly broken environment. The notebook pins inside Unsloth's supported window and
+asserts the resolved versions at startup.
 
-If you are reading this well after July 2026, re-derive the window rather than trusting the
-pins:
+If you are reading this well after July 2026, re-derive the window rather than trusting the pins:
 
 ```python
 from importlib.metadata import requires
@@ -118,9 +131,9 @@ for r in requires("unsloth") or []:
 - **Model** — Qwen2.5-1.5B-Instruct, released by Alibaba Cloud under a permissive open license
   (Apache-2.0 for most sizes in the family). Confirm on the model card before any use beyond
   coursework.
-- **Dataset** — `yahma/alpaca-cleaned`. The Alpaca lineage was generated using OpenAI model
-  outputs and inherits usage restrictions from that origin, typically non-commercial. Fine for
-  coursework; use a cleanly licensed dataset for anything you ship.
+- **Dataset** — `yahma/alpaca-cleaned`. The Alpaca lineage was generated using OpenAI model outputs
+  and inherits usage restrictions from that origin, typically non-commercial. Fine for coursework;
+  use a cleanly licensed dataset for anything you ship.
 - **Libraries** — Unsloth, `transformers`, `peft`, `trl` (Apache-2.0); `bitsandbytes` (MIT).
 
 See §19 of the tutorial for the full attribution and reproducibility checklist.
