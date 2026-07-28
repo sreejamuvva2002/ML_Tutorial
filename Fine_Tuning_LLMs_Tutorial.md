@@ -266,11 +266,23 @@ Note that even a 1.5B model cannot be fully fine-tuned on a free T4 — and that
 
 Both fit on a free T4. That is the entire reason this tutorial is runnable in a classroom setting.
 
-> **Measured.** A real run of §8 on a T4 peaked at **4.06 GB** (§11.5). The first version of this
-> table predicted 2–4 GB, so the estimate was close but its upper bound was slightly low — which is
-> the normal outcome for activation estimates, since they depend on the actual token-length
-> distribution of your data rather than on `max_length`. Treat the range as a planning figure with
-> ~25% headroom, not a guarantee.
+> **Measured, three times — and the spread is the lesson.**
+>
+> | Run | Hardware / precision | `max_length` | Peak VRAM |
+> |---|---|---|---|
+> | Run 1, Alpaca only | Tesla T4 / fp16 | 2048 | 4.06 GB |
+> | Run 2 config | Tesla T4 / fp16 | 1024 | **6.17 GB** |
+> | Run 2 config | RTX A5000 / bf16 | 1024 | **2.19 GB** |
+>
+> The last two rows are the *same code and the same configuration* on different GPUs, and they
+> differ by 2.8×. Precision (bf16 vs fp16) and attention kernels (Ampere's flash paths vs
+> Turing's fallbacks) dominate the activation footprint. Note also that run 2 used a *shorter*
+> `max_length` than run 1 and still used more memory on the same T4 — sequence length is not the
+> only driver.
+>
+> Two consequences. A predicted range is a planning figure, not a guarantee: budget ~50% headroom
+> rather than the ~25% this table's earlier version implied. And **a VRAM measurement is only
+> evidence for the hardware it was taken on** — you cannot certify a T4 by measuring an A5000.
 
 ### 6.3 How many parameters does LoRA actually train?
 
@@ -915,10 +927,16 @@ the accompanying notebook, and the numbers below come from that complete, execut
 > is 48 records, and the `strict_json_only_rate` metric is included.
 >
 > **Reference hardware.** The final run was executed on an **NVIDIA RTX A5000 (25 GB, Ampere,
-> compute 8.6)**, so it selects **bf16** per Cell 2's capability check. This does not change the
-> tutorial's "runs on a free T4" claim: peak VRAM was **2.19 GB**, leaving large headroom inside
-> a T4's 16 GB. A T4 would run the same code in fp16; expect its numbers to differ slightly from
-> the bf16 figures here, and its runtime to be longer.
+> compute 8.6)**, so it selects **bf16** per Cell 2's capability check. A T4 would run the same
+> code in fp16; expect its numbers to differ, and its runtime to be longer.
+>
+> **The T4 claim rests on a T4 measurement, not this one.** An earlier execution of this same
+> training configuration on an actual Colab T4 peaked at **6.17 GB** — 2.8× the A5000's 2.19 GB.
+> Peak VRAM does not transfer across hardware: bf16 versus fp16, and Ampere's flash-attention
+> paths versus Turing's fallbacks, change the activation footprint substantially. The tutorial's
+> "fits a free T4" claim holds because **6.17 GB fits in 16 GB**, measured on the hardware in
+> question — citing the A5000's 2.19 GB to support a T4 claim would be an invalid inference from
+> the wrong machine, however comfortable the number looks.
 
 #### Run 1 — Alpaca only (2026-07-27)
 
