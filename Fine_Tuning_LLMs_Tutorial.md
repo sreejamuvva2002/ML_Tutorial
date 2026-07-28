@@ -897,6 +897,14 @@ Fine-tuning can degrade general ability while improving your target task. To che
 
 Two experiments were run on a free Colab T4. Read them together — the pair is the finding.
 
+> **These are pilot numbers, pending one final run.** The notebook has since been hardened in
+> ways that change what is measured: the Alpaca ROUGE sample went from 25 to 100 examples, the
+> challenge set from 24 to 48, and a `strict_json_only_rate` metric was added. The
+> in-distribution structured results should be stable — training data is bit-identical — but
+> **the ROUGE and challenge figures below will move**, and the tables must be regenerated from
+> the final clean run rather than carried over. Numbers that are expected to hold are marked
+> *stable*; numbers that will change are marked *supersede*.
+
 #### Run 1 — Alpaca only (2026-07-27)
 
 | | |
@@ -938,6 +946,8 @@ Alpaca data. Both model conditions are evaluated on untouched test splits.
 
 **Structured JSON, 60 held-out examples**
 
+*Stable — training data is bit-identical across runs.*
+
 | Metric | Base | Tuned | Δ |
 |---|---|---|---|
 | `all_fields_exact_rate` | 0.717 | 1.000 | **+0.283** |
@@ -949,13 +959,21 @@ Alpaca data. Both model conditions are evaluated on untouched test splits.
 Note that `valid_json_rate` is *not* the headline: the base model already produced valid JSON
 every time. The gains are in field-level correctness and key ordering.
 
-**Held-out Alpaca ROUGE, base vs. tuned**
+**Held-out Alpaca ROUGE, base vs. tuned** *(supersede: n=25 here, n=100 in the final run)*
 
 | Metric | Base | Tuned | Δ |
 |---|---|---|---|
-| ROUGE-1 | 0.374 | 0.401 | +0.027 |
-| ROUGE-2 | 0.119 | 0.132 | +0.013 |
-| ROUGE-L | 0.233 | 0.246 | +0.013 |
+| ROUGE-1 | 0.374 | 0.408 | +0.034 |
+| ROUGE-2 | 0.119 | 0.137 | +0.019 |
+| ROUGE-L | 0.233 | 0.250 | +0.017 |
+
+> **A measured noise floor.** Run 2 was executed twice from the same seed. Training was
+> bit-identical — best validation loss 0.7962 at step 200 both times — and the *base* model's
+> ROUGE was identical to 16 decimal places. The *tuned* model's ROUGE-1 was not: 0.4010 the
+> first time, 0.4084 the second. Greedy decoding through the adapter is not bit-reproducible
+> on this stack, so roughly **±0.007 ROUGE-1** is this setup's run-to-run wobble. The +0.034
+> delta above is about five times that, so it survives; a delta of 0.01 would not have. Report
+> a noise floor whenever you report a small metric difference.
 
 #### What these numbers do and do not establish
 
@@ -1010,9 +1028,57 @@ A small gap indicates the adapter learned to extract fields; a large gap indicat
 the four training templates. Either outcome is publishable in a write-up; only the
 in-distribution number alone is not.
 
-> **Pending.** The challenge set was added after run 2, so it has no results yet. Re-run the
-> notebook to populate it; the numbers land in `results/metrics.json` under
-> `structured_json_challenge`, including `generalisation_gap_tuned`.
+#### Pilot results — 24 records *(supersede: the final run uses 48)*
+
+| Metric | Base | Tuned | Δ |
+|---|---|---|---|
+| `all_fields_exact_rate` | 0.458 | **0.667** | +0.208 |
+| `supply_chain_role_accuracy` | 0.500 | 0.667 | +0.167 |
+| `city_accuracy` | 0.833 | 1.000 | +0.167 |
+| `company_name_accuracy` | 1.000 | 1.000 | 0.000 |
+| `employee_count_accuracy` | 1.000 | 1.000 | 0.000 |
+| `iso_9001_accuracy` | 1.000 | 1.000 | 0.000 |
+| `valid_json_rate` | 1.000 | 1.000 | 0.000 |
+| `exact_key_order_rate` | 1.000 | 1.000 | 0.000 |
+
+**The generalisation gap is 0.333** — the tuned model scores 1.000 in-distribution and 0.667
+on the challenge set. Three things follow, and the third is the one most write-ups would miss.
+
+**1. The adapter learned more than the four templates.** It beats the base model on
+out-of-distribution records by +0.208 exact-match. Had it merely memorised template slot
+positions, it would have collapsed toward the base model on unseen formats. It did not.
+
+**2. But a third of the in-distribution score does not transfer.** The perfect 1.000 in §11.5
+substantially overstates what the adapter can do on records it has not seen the shape of.
+Reporting that number alone would have been misleading — which is the entire reason this
+section exists.
+
+**3. Some of the gap is the task getting harder, not the adapter overfitting.** The base model
+also drops on the challenge set, from 0.717 to 0.458 — a fall of 0.259 without any fine-tuning
+involved. So the challenge records are intrinsically harder for both conditions, and only the
+*difference* between the two drops (0.333 versus 0.259) is attributable to the adapter being
+more template-dependent than the base model. That residual is small. A write-up that reported
+the 0.333 gap as pure overfitting would be wrong; the base-model arm is what makes this
+distinguishable, and it is the reason both conditions must always be evaluated.
+
+**Where the failures are.** Every single out-of-distribution error is a `supply_chain_role`
+error. The tuned model scored 1.000 on company name, city, employee count, and ISO status, and
+0.667 on role — and `all_fields_exact_rate` is also exactly 0.667, so the 8 failing records are
+precisely the 8 with a wrong role. That is a sharp, actionable diagnosis rather than a diffuse
+"it got worse".
+
+Note what separates that field from the others: company name, city, and headcount are **literal
+spans** to copy out of the record, while `supply_chain_role` is a **closed-set label** the model
+must select. The results are consistent with the adapter having learned robust span extraction
+and less robust label classification under unfamiliar phrasing — but that is a hypothesis
+suggested by the metrics, not something they establish. Confirming it means reading
+`results/challenge_tuned_predictions.jsonl` to see whether the wrong roles are, for example,
+inferred from the product name rather than the stated role. Exercise 10 pursues this.
+
+> **Scope.** 24 challenge records and 60 in-distribution records, one model, one seed. These
+> are small-sample estimates; a ±1 example change moves `all_fields_exact_rate` by 0.042 on the
+> challenge set. Treat the gap as an indication of direction and rough magnitude, not a precise
+> quantity.
 
 ---
 
