@@ -853,7 +853,14 @@ for p in PROMPTS:
 
 **Score these by hand.** For a class deliverable this manual table is stronger evidence than any automatic metric:
 
-Scored from the run recorded in §11.5:
+Scored from **run 1** (Alpaca-only), recorded in §11.5.
+
+> **The final notebook uses a different prompt set.** Rows 3 and 5 below no longer correspond
+> to anything the notebook runs: the bulleted-list and email prompts were replaced by
+> *"Return a JSON object with keys item and quantity for: five notebooks"* and a held-out
+> structured record, so the qualitative check exercises the task actually being taught. Rows 1,
+> 2 and 4 are unchanged. Re-score this table from the final run's
+> `results/qualitative_comparison.jsonl` — do not carry rows 3 and 5 forward.
 
 | # | Prompt | Format | Followed instruction | Factually OK | Better than base? |
 |---|---|---|---|---|---|
