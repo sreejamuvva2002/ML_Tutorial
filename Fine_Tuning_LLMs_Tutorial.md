@@ -16,8 +16,8 @@
 | File | Type | Purpose |
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
-| `finetuning_tutorial.ipynb` | Runnable code | The same code as an executable Colab/Jupyter notebook |
-| `finetuning_tutorial_executed.ipynb` | Evidence | A complete run with all outputs and the loss curve (results in §11.5) |
+| `finetuning_tutorial.ipynb` | Runnable code | The full experiment: two datasets, base-vs-tuned evaluation, structured-JSON metrics, and the §11.6 challenge set |
+| `finetuning_tutorial_executed.ipynb` | Evidence | Run 1 with all outputs and the loss curve (§11.5) |
 | `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
 | `presentation.mp4` *(optional)* | Recording | ~10-minute walkthrough (see §15 for the outline) |
 
@@ -407,6 +407,25 @@ assert V("0.20") <= V(trl.__version__) <= V("0.24.0"), (
 
 <a name="8-handson"></a>
 ## 8. Hands-on: QLoRA fine-tuning, end to end
+
+> **This section and the notebook differ, deliberately.** §8 below is the minimal teaching
+> path: one dataset, one model, the smallest code that shows how QLoRA works. The companion
+> `finetuning_tutorial.ipynb` implements the stricter experiment used for the results in
+> §11.5–§11.6, which adds:
+>
+> - **two datasets** — general Alpaca plus a deterministic structured-JSON task with exact
+>   gold answers, so improvement can be measured rather than eyeballed
+> - **three-way splits** (80/10/10) per source, with the test split never seen by the trainer
+>   nor used for checkpoint selection
+> - **TRL prompt-completion format** with `completion_only_loss=True`, the §8.7 upgrade
+>   applied from the start
+> - **both model conditions evaluated** — base and tuned on identical prompts, so every metric
+>   has a baseline
+> - **pinned model and dataset revisions**, recorded in `results/environment.json`
+> - an **out-of-distribution challenge set** (§11.6)
+>
+> Read §8 to understand the mechanics; run the notebook to reproduce the results.
+
 
 We fine-tune **Qwen2.5-1.5B-Instruct** on a slice of the public **Alpaca-cleaned** instruction dataset. Small model + small data = fast, reproducible, and it fits on a free GPU. The same code scales to 7–8B by changing one string.
 
@@ -874,84 +893,126 @@ Fine-tuning can degrade general ability while improving your target task. To che
 
 > **Frameworks worth knowing:** `evaluate` (ROUGE/BLEU/BERTScore/EM), **lm-evaluation-harness** (standardized benchmarks), and **DeepEval** (pytest-style LLM tests with an LLM-as-judge). Treat LLM-as-judge scores as a *secondary* signal — judges have known biases toward length, verbosity, and their own family of models.
 
-### 11.5 Results from an actual run
+### 11.5 Results from actual runs
 
-Everything below comes from one complete execution of §8–§12 on a free Colab T4 on 2026-07-27.
-The executed notebook, outputs and loss curve included, is `finetuning_tutorial_executed.ipynb`.
+Two experiments were run on a free Colab T4. Read them together — the pair is the finding.
 
-**Environment**
+#### Run 1 — Alpaca only (2026-07-27)
 
 | | |
 |---|---|
-| GPU | Tesla T4, 15.6 GB, compute capability 7.5 → fp16 |
-| Python / torch | 3.12.13 / 2.11.0+cu128 |
+| GPU / precision | Tesla T4, 15.6 GB, capability 7.5 → fp16 |
 | Libraries | unsloth 2026.7.5, trl 0.24.0, transformers 5.5.0, peft 0.19.1 |
-| Seed | 3407 |
-| Data | `yahma/alpaca-cleaned`, `train[:2000]` → 1,700 train / 300 eval |
-| LoRA | `r=16`, `alpha=32`, `dropout=0.05`, all seven projections |
-| Schedule | effective batch 8 (2 × 4), 1 epoch = 213 steps, lr 2e-4 cosine, 6 warmup steps |
+| Data | `yahma/alpaca-cleaned` `train[:2000]` → 1,700 / 300 |
+| LoRA trainable parameters | 18,464,768 (1.1820%) — matches §6.3 exactly |
+| Peak VRAM | 4.06 GB of 15.6 |
+| Runtime | 9.4 min (213 steps) |
+| Best validation loss / perplexity | 1.0211 / 2.78 |
+| ROUGE-1 / 2 / L | 0.525 / 0.306 / 0.401 |
 
-Note that `trl` and `transformers` resolved to **exactly** the ceilings §7.2 derives from Unsloth's
-metadata — 0.24.0 and 5.5.0. That is the version analysis confirming itself against a real
-resolver, and it is why the retired `trl>=1.0,<2.0` pin could never have installed.
+`trl` and `transformers` resolved to **exactly** the ceilings §7.2 derives from Unsloth's
+metadata (0.24.0 and 5.5.0) — the version analysis confirming itself against a real resolver.
 
-**Predictions vs. measurements**
+**The result was negative.** Across the five prompts in §11.2 the fine-tuned model was never
+clearly better, was indistinguishable on three, and was worse on two — most visibly turning
+`- Milk` into `- We need milk.`
 
-| Quantity | Predicted | Measured | |
+That is the experiment working. Qwen2.5-1.5B-**Instruct** is already instruction-tuned, and
+Alpaca is distilled from a weaker GPT-3-era teacher, so SFT taught a strong model to imitate a
+worse one. Validation loss fell while human-visible quality did not improve — §10.3's warning
+demonstrated rather than asserted. Note also that run 1 lacked a base-model arm on ROUGE, so
+its 0.525 cannot be compared to anything; run 2 fixed that.
+
+#### Run 2 — structured task + general replay
+
+Run 2 changed the experiment rather than the hyperparameters: it added a deterministic
+**company-record → JSON** task with exact, field-level gold answers, and mixed it with general
+Alpaca data. Both model conditions are evaluated on untouched test splits.
+
+| | |
+|---|---|
+| Data | 1,120 Alpaca + 480 structured (train); independent 10% validation and 10% test |
+| Loss | `completion_only_loss=True` — assistant tokens only |
+| Runtime / peak VRAM | 8.8 min (200 steps) / 6.17 GB |
+| Best validation loss / perplexity | 0.7962 / 2.22 |
+
+**Structured JSON, 60 held-out examples**
+
+| Metric | Base | Tuned | Δ |
 |---|---|---|---|
-| LoRA trainable parameters (§6.3) | 18,464,768 | 18,464,768 (1.1820%) | exact |
-| Peak VRAM (§6.2) | ~2–4 GB | **4.06 GB** of 15.6 | slightly over |
-| Training time (§1) | 10–25 min | **9.4 min** | faster |
+| `all_fields_exact_rate` | 0.717 | 1.000 | **+0.283** |
+| `city_accuracy` | 0.783 | 1.000 | +0.217 |
+| `supply_chain_role_accuracy` | 0.933 | 1.000 | +0.067 |
+| `exact_key_order_rate` | 0.950 | 1.000 | +0.050 |
+| `valid_json_rate` | 1.000 | 1.000 | 0.000 |
 
-The parameter arithmetic landed to the digit, which is the check §6.3 asks you to perform. The
-memory estimate was ~1.5% low at the top of its range; §6.2 has been widened accordingly.
+Note that `valid_json_rate` is *not* the headline: the base model already produced valid JSON
+every time. The gains are in field-level correctness and key ordering.
 
-**Metrics**
+**Held-out Alpaca ROUGE, base vs. tuned**
 
-| Metric | Value |
-|---|---|
-| Best validation loss | **1.0211** (step 213) |
-| Perplexity | **2.78** |
-| ROUGE-1 / ROUGE-2 / ROUGE-L | **0.525 / 0.306 / 0.401** (n=25, held out) |
+| Metric | Base | Tuned | Δ |
+|---|---|---|---|
+| ROUGE-1 | 0.374 | 0.401 | +0.027 |
+| ROUGE-2 | 0.119 | 0.132 | +0.013 |
+| ROUGE-L | 0.233 | 0.246 | +0.013 |
 
-**The model was still improving when training stopped.** Best validation loss occurred at step 213
-— the *final* step — so nothing here is overfitting. This run is **underfitting**, and per §10.2 the
-remedy is more epochs, not more regularization. `load_best_model_at_end` therefore restored the last
-checkpoint; the mechanism was correct but had nothing to rescue.
+#### What these numbers do and do not establish
 
-#### The headline result: fine-tuning did not help, and slightly hurt
+The structured improvement is large and measured against exact gold values, so it is solid
+evidence that QLoRA adapted the model to a clearly specified output task. Beyond that, be
+careful:
 
-The §11.2 rubric table tells an uncomfortable story. Across five prompts the fine-tuned model was
-never clearly better, was indistinguishable on three, and was **worse on two** — most visibly here:
+- **A perfect score is not saturation.** 100% on 60 examples is perfect performance *on those
+  60 examples*. It does not show the task is solved, and it does not show further training
+  cannot help. §11.6 exists because of exactly this.
+- **Best validation loss at the final step is not proof of underfitting.** It shows only that
+  validation loss had not yet worsened. Longer training might help, do nothing, or begin
+  overfitting; settling that needs an epoch ablation.
+- **The ROUGE change is modest, and ROUGE is a surface-overlap metric.** It says nothing about
+  reasoning, factuality, or hallucination. The defensible claim is that *no degradation
+  appeared on the sampled held-out Alpaca data* — not that general capability was preserved.
+- **Replay is not proven to be the cause.** Mixing general data with task data is a plausible
+  explanation for the absence of regression, but demonstrating it requires the ablation in
+  §14 Exercise 9: the same run with and without replay, compared on both suites.
+- One model, one seed, small test sets. Nothing here generalises without repetition.
 
-| | Output for *"Convert this to a bulleted list: we need milk, eggs, and bread."* |
-|---|---|
-| **Base** | `- Milk` / `- Eggs` / `- Bread` |
-| **Fine-tuned** | `- We need milk.` / `- We need eggs.` / `- We need bread.` |
+> **On run 2's `Evals recorded` count.** Run 1's report printed 7; only 4 came from the
+> `eval_steps` cadence. The rest were duplicate entries at the final step logged by standalone
+> `trainer.evaluate()` calls that computed successfully before failing in the notebook display
+> callback (§13.2). Report the cadence count, not the log length.
 
-This is not a failed experiment; it is the experiment working and telling you something true.
-**Qwen2.5-1.5B-Instruct is already instruction-tuned**, and Alpaca is an older dataset distilled
-from a weaker, GPT-3-era teacher. Fine-tuning a strong instruction model on a weaker instruction
-dataset teaches it to imitate the weaker one. The loss went down — the model got better at
-predicting *Alpaca's* tokens — while the qualities a human cares about got slightly worse. That gap
-is precisely §10.3 and §11's opening warning: a falling loss is not evidence of a better model.
+### 11.6 Separating extraction from template memorisation
 
-Prompt 4 (capital of Australia) was unchanged, both models answering correctly — exactly the
-outcome §11.2 predicts and a direct restatement of §3's thesis that fine-tuning is not a
-knowledge-injection tool.
+The §11.5 structured test is drawn from the **same four record templates and twelve cities**
+used in training; only company names and numbers differ. A model can score 100% there by
+learning "the third field of template B is the headcount" without learning to extract
+anything. A perfect in-distribution score is therefore consistent with two very different
+models, and the metric alone cannot tell them apart.
 
-**What to do differently.** Fine-tune the **base** checkpoint, `unsloth/Qwen2.5-1.5B` without
-`-Instruct`, which has no instruction-following behavior to lose and therefore has something to
-gain from SFT. Alternatively keep the Instruct model and train on data of higher quality than its
-existing tuning — which is a much harder bar than it sounds, and is the real lesson: **for an
-already-aligned model, your data has to beat what it was already trained on, or you will move
-backwards.**
+The notebook's §11b builds a challenge set that holds the task fixed and changes only the
+surface:
 
-> **A caveat on this run's own numbers.** The training report printed `Evals recorded: 7`. Only 4–5
-> of those came from the `eval_steps=50` cadence; the remainder are duplicate entries at step 213
-> logged by standalone `trainer.evaluate()` calls that computed successfully before failing in the
-> notebook display callback (§13.2). They carry identical values, so the loss curve is unaffected,
-> but the count is not a count of independent evaluations. Report 4.
+| Dimension | In-distribution test | Challenge set |
+|---|---|---|
+| Record templates | the 4 seen in training | 6 unseen (prose, memo, bullets, pipe-delimited, Q&A, dossier) |
+| Cities | the 12 seen in training | 12 unseen |
+| Company names | `{Prefix} {Noun} {Suffix}` grid | off-grid (`Ohm & Sons Manufacturing`, `3Rivers Composites`) |
+| Headcount format | bare integer | also `2,634` and `approximately 4,960` |
+| ISO-9001 phrasing | `yes` / `certified` / `no` / `not certified` | `holds ISO 9001`, `accredited to ISO 9001`, `lacks ISO 9001 certification` |
+| Distractor sentences | none | one per record, carrying no schema field |
+
+The instruction wrapper is byte-identical to training — the notebook asserts this at runtime —
+so the only variable is record format.
+
+**The number to report is the gap**, `all_fields_exact_rate` in-distribution minus challenge.
+A small gap indicates the adapter learned to extract fields; a large gap indicates it learned
+the four training templates. Either outcome is publishable in a write-up; only the
+in-distribution number alone is not.
+
+> **Pending.** The challenge set was added after run 2, so it has no results yet. Re-run the
+> notebook to populate it; the numbers land in `results/metrics.json` under
+> `structured_json_challenge`, including `generalisation_gap_tuned`.
 
 ---
 
@@ -1052,6 +1113,17 @@ Each exercise names what to report, so results are comparable across the class.
 7. **Scale up.** Swap to `unsloth/Qwen2.5-7B-Instruct`. *Report:* peak VRAM and time per step versus the 1.5B run. Compare against your §6.2 prediction.
 
 8. **The negative result** *(recommended)*. Fine-tune on 50 examples of made-up facts (e.g. fictional product specs), then test whether the model reproduces them reliably. *Report:* accuracy, and what this demonstrates about §3.
+
+9. **The replay ablation** *(the missing control in §11.5)*. §11.5 observes that general ROUGE did not drop when task data was mixed with general Alpaca data, but cannot show the replay *caused* that. Run both arms:
+
+   | Arm | Structured data | General replay |
+   |---|---|---|
+   | A | 480 examples | none |
+   | B | 480 examples | 1,120 Alpaca examples |
+
+   Hold total steps constant if you can, so the comparison is not confounded by training length. *Report:* structured `all_fields_exact_rate` and Alpaca ROUGE for both arms. Does A lose general performance? Does B lose structured performance relative to A? This converts a plausible reading into an actual finding.
+
+10. **The generalisation gap.** Run the notebook's §11b challenge set and report `generalisation_gap_tuned`. Then make the challenge set harder: records with a *missing* field, two companies in one record, or a field contradicted later in the text. *Report:* where extraction breaks down, and what that implies about what the adapter actually learned.
 
 ---
 
@@ -1198,9 +1270,11 @@ This two-line habit is more durable than any table, including this one.
 - [ ] Dataset name, split, and slice recorded
 - [ ] All hyperparameters listed (copy the `SFTConfig`)
 - [ ] Training *and* validation loss curves included (Cell 7b saves `loss_curves.png`)
-- [ ] Baseline (un-tuned) comparison included
+- [ ] Baseline (un-tuned) comparison included **for every metric reported**
 - [ ] Evaluation prompts published so results can be checked
 - [ ] Metrics computed on held-out data, not the training slice
+- [ ] Out-of-distribution result reported alongside the in-distribution one (§11.6)
+- [ ] Claims scoped to what was measured — no "saturated", no "preserved general capability" from ROUGE alone, no causal claim without an ablation
 
 ---
 
