@@ -1,0 +1,19 @@
+# Local virtualenv for the real GPU run (390 MB)
+.venv_ft/
+
+# Training checkpoints and compile cache (regenerable, large)
+outputs/
+unsloth_compiled_cache/
+
+# Trained adapter binaries — regenerable from the notebook; too large for git
+# (adapter_model.safetensors is ~73 MB). Use git-lfs if you want them versioned.
+lora_adapter/
+lora_adapter.zip
+results.zip
+
+# Accidental nested clone
+ML_Tutorial/
+
+# Python
+__pycache__/
+*.pyc

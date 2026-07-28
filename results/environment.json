@@ -1,0 +1,33 @@
+{
+  "python": "3.13.9",
+  "gpu": "NVIDIA RTX A5000",
+  "vram_gb": 25.276186624,
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch_version": "2.10.0+cu128",
+  "cuda_runtime": "12.8",
+  "cudnn_version": 91002,
+  "bf16_supported": true,
+  "fp16_enabled": false,
+  "seed": 3407,
+  "model_id": "unsloth/Qwen2.5-1.5B-Instruct",
+  "model_revision": "b2e27ed8774d78eb2ee474cfe99d2d3b5fae11e5",
+  "dataset_id": "yahma/alpaca-cleaned",
+  "dataset_revision": "12567cabf869d7c92e573c7c783905fc160e9639",
+  "max_sequence_length": 1024,
+  "packages": {
+    "torch": "2.10.0",
+    "unsloth": "2026.7.5",
+    "trl": "0.24.0",
+    "transformers": "5.5.0",
+    "peft": "0.19.1",
+    "accelerate": "1.12.0",
+    "bitsandbytes": "0.49.2",
+    "datasets": "4.3.0",
+    "evaluate": "0.4.6",
+    "rouge_score": "0.1.2",
+    "huggingface_hub": "1.25.1"
+  }
+}
