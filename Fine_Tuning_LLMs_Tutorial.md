@@ -17,7 +17,8 @@
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
 | `finetuning_tutorial.ipynb` | Runnable code | The full experiment: two datasets, base-vs-tuned evaluation, structured-JSON metrics, and the §11.6 challenge set |
-| `finetuning_tutorial_executed_run2.ipynb` | Evidence | The final run, fully executed, with all cell outputs, metrics, and the loss curve (§11.5–§11.6) |
+| `finetuning_tutorial_executed_run2.ipynb` | Evidence | The final run on an RTX A5000, fully executed; its outputs are the files in `results/` |
+| `finetuning_tutorial_executed_run2_t4.ipynb` | Evidence | The same notebook re-executed on a free Colab T4 — the replication in §11.5 |
 | `finetuning_tutorial_executed_run1.ipynb` | Evidence | The earlier Alpaca-only run on a T4 — the negative result reported as Run 1 in §11.5. Preserved as-run, including the `trainer.evaluate()` failure documented in §13.2 that prompted the Cell 7 rewrite |
 | `results/` | Evidence | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example base-vs-tuned prediction logs |
 | `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
@@ -267,23 +268,32 @@ Note that even a 1.5B model cannot be fully fine-tuned on a free T4 — and that
 
 Both fit on a free T4. That is the entire reason this tutorial is runnable in a classroom setting.
 
-> **Measured, three times — and the spread is the lesson.**
+> **Measured, four times — and the biggest factor is not the one you would guess.**
 >
 > | Run | Hardware / precision | `max_length` | Peak VRAM |
 > |---|---|---|---|
 > | Run 1, Alpaca only | Tesla T4 / fp16 | 2048 | 4.06 GB |
-> | Run 2 config | Tesla T4 / fp16 | 1024 | **6.17 GB** |
-> | Run 2 config | RTX A5000 / bf16 | 1024 | **2.19 GB** |
+> | Run 2, before the import-order fix | Tesla T4 / fp16 | 1024 | **6.17 GB** |
+> | Run 2, final | Tesla T4 / fp16 | 1024 | **2.86 GB** |
+> | Run 2, final | RTX A5000 / bf16 | 1024 | **2.19 GB** |
 >
-> The last two rows are the *same code and the same configuration* on different GPUs, and they
-> differ by 2.8×. Precision (bf16 vs fp16) and attention kernels (Ampere's flash paths vs
-> Turing's fallbacks) dominate the activation footprint. Note also that run 2 used a *shorter*
-> `max_length` than run 1 and still used more memory on the same T4 — sequence length is not the
-> only driver.
+> Rows 2 and 3 are the **same GPU, same precision, same configuration** — and differ by 2.2×.
+> The only meaningful change between them is that `unsloth` is now imported *before*
+> `transformers` (§7.3). Importing it late left the warning `Unsloth should be imported before
+> transformers` in the log and silently skipped its memory optimisations. A one-line import
+> ordering was worth more than 3 GB.
 >
-> Two consequences. A predicted range is a planning figure, not a guarantee: budget ~50% headroom
-> rather than the ~25% this table's earlier version implied. And **a VRAM measurement is only
-> evidence for the hardware it was taken on** — you cannot certify a T4 by measuring an A5000.
+> Rows 3 and 4 are the genuine hardware comparison — the same final code on Turing/fp16 versus
+> Ampere/bf16 — and differ by only 1.3×. That is the honest size of the hardware effect.
+>
+> An earlier version of this note attributed the 6.17 GB figure to hardware and precision, and
+> warned that VRAM estimates do not transfer across GPUs. That inference was wrong: it compared
+> a misconfigured build against a correct one and read the difference as an architecture effect.
+> Memory measurements *do* transfer reasonably well here — what does not transfer is a
+> measurement taken from a differently configured environment. Check your warnings before
+> attributing a number to your hardware.
+>
+> Budget ~50% headroom over the table's estimate regardless.
 
 ### 6.3 How many parameters does LoRA actually train?
 
@@ -931,13 +941,9 @@ the accompanying notebook, and the numbers below come from that complete, execut
 > compute 8.6)**, so it selects **bf16** per Cell 2's capability check. A T4 would run the same
 > code in fp16; expect its numbers to differ, and its runtime to be longer.
 >
-> **The T4 claim rests on a T4 measurement, not this one.** An earlier execution of this same
-> training configuration on an actual Colab T4 peaked at **6.17 GB** — 2.8× the A5000's 2.19 GB.
-> Peak VRAM does not transfer across hardware: bf16 versus fp16, and Ampere's flash-attention
-> paths versus Turing's fallbacks, change the activation footprint substantially. The tutorial's
-> "fits a free T4" claim holds because **6.17 GB fits in 16 GB**, measured on the hardware in
-> question — citing the A5000's 2.19 GB to support a T4 claim would be an invalid inference from
-> the wrong machine, however comfortable the number looks.
+> **The T4 claim rests on a direct T4 measurement.** The identical notebook was then executed on
+> a free Colab T4 in fp16, peaking at **2.86 GB** in **8.9 min** — comfortably inside 16 GB. The
+> two runs also replicate each other (below), which is stronger evidence than either alone.
 
 #### Run 1 — Alpaca only (2026-07-27)
 
@@ -1031,6 +1037,36 @@ no-regression result on general instruction-following, not evidence of a large c
 > that floor, so it survives; a delta of 0.01 would not have. This final run was executed once,
 > so treat the deltas as point estimates above a known ±0.007 floor. Report a noise floor
 > whenever you report a small metric difference.
+
+#### Replication: the same notebook on a Tesla T4
+
+Run 2 was executed twice — once on an RTX A5000 in bf16, once on a free Colab T4 in fp16. Same
+code, same seed, different hardware and different precision.
+
+| | A5000 / bf16 | T4 / fp16 |
+|---|---|---|
+| Runtime | 5.1 min | 8.9 min |
+| Peak VRAM | 2.19 GB | 2.86 GB |
+| Best validation loss | 0.8013 | 0.8014 |
+| In-distribution all-fields (base → tuned) | 0.750 → 1.000 | 0.750 → 1.000 |
+| Strict JSON-only (base → tuned) | 0.000 → 1.000 | 0.000 → 1.000 |
+| Challenge all-fields (base → tuned) | 0.438 → 0.562 | 0.438 → 0.542 |
+| ROUGE-1 delta | +0.043 | +0.052 |
+| Challenge `qa` template (base → tuned) | 0.125 → 0.875 | 0.125 → 0.875 |
+
+**Every qualitative conclusion replicates.** Validation loss agrees to four decimal places, the
+in-distribution and strict-JSON results are identical, and the challenge-set gain is concentrated
+in the same single template. The two challenge scores differ by 0.02 — one record out of 48 —
+which is well inside the sampling noise the Wilson intervals in §11.6 describe.
+
+One difference worth reporting rather than smoothing over: on the `dossier` template the A5000 run
+scored 0.250 → 0.250 while the T4 run scored 0.250 → **0.125**, a single record flipping to a
+*regression*. At n=8 per template, per-template figures are indicative only. The aggregate is
+robust; the per-template breakdown is a diagnostic pointer, not a measurement.
+
+A second execution on different hardware is the cheapest meaningful robustness check available to
+a student project — far cheaper than a second seed, and it catches environment-specific artefacts
+that reruns on one machine cannot.
 
 #### What these numbers do and do not establish
 

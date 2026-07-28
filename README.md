@@ -15,7 +15,8 @@ Author: Sreeja Muvva.
 |---|---|
 | [`Fine_Tuning_LLMs_Tutorial.md`](Fine_Tuning_LLMs_Tutorial.md) | The written tutorial: concepts, code, interpretation, exercises |
 | [`finetuning_tutorial.ipynb`](finetuning_tutorial.ipynb) | The runnable experiment |
-| [`finetuning_tutorial_executed_run2.ipynb`](finetuning_tutorial_executed_run2.ipynb) | The final run, fully executed, all outputs saved |
+| [`finetuning_tutorial_executed_run2.ipynb`](finetuning_tutorial_executed_run2.ipynb) | The final run on an RTX A5000, fully executed — source of `results/` |
+| [`finetuning_tutorial_executed_run2_t4.ipynb`](finetuning_tutorial_executed_run2_t4.ipynb) | The same notebook re-executed on a free Colab T4 (replication) |
 | [`finetuning_tutorial_executed_run1.ipynb`](finetuning_tutorial_executed_run1.ipynb) | The earlier Alpaca-only run (the negative result) |
 | `results/` | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example prediction logs |
 | `requirements.txt` | Pinned dependencies for local (non-Colab) runs |
@@ -36,11 +37,11 @@ worse on two, most visibly turning `- Milk` into `- We need milk.` Qwen2.5-1.5B-
 already instruction-tuned and Alpaca is distilled from a weaker teacher, so SFT taught a strong
 model to imitate a worse one. Validation loss fell while human-visible quality did not improve.
 
-### Run 2 — structured task with general replay (RTX A5000)
+### Run 2 — structured task with general replay (RTX A5000, replicated on a T4)
 
 Changed the experiment rather than the hyperparameters: added a deterministic company-record → JSON
 task with exact field-level gold answers, mixed with general Alpaca data, and evaluated **both**
-model conditions on untouched test splits. 5.1 min, peak 2.19 GB, validation loss 0.8013.
+model conditions on untouched test splits. 5.1 min, peak 2.19 GB, validation loss 0.8013. Re-executed on a free Colab T4 in fp16: 8.9 min, peak 2.86 GB, validation loss 0.8014 — every conclusion replicates (§11.5).
 
 **In-distribution structured test (n=60)**
 
@@ -104,8 +105,9 @@ it already), then:
 pip install -r requirements.txt
 ```
 
-Peak VRAM does not transfer across hardware — the same configuration measured 6.17 GB on a T4 and
-2.19 GB on an A5000. Budget headroom accordingly; §6.2 tabulates all three measurements.
+The final code measured 2.86 GB on a T4 and 2.19 GB on an A5000. An earlier build measured 6.17 GB
+on the same T4 purely because `unsloth` was imported after `transformers` — see §6.2, where that
+one-line ordering is worth more than 3 GB.
 
 ## A note on library versions
 
