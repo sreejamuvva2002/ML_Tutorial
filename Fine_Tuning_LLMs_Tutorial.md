@@ -7,7 +7,7 @@
 | **Author** | Sreeja Muvva |
 | **Course / Section** | ARTI 4555/6555 (graduate section) |
 | **Program** | MS in Artificial Intelligence |
-| **Instructor** | *(instructor)* |
+| **Instructor** | Sreeja Muvva |
 | **Date** | 2026-07-27 |
 | **Work statement** | Completed individually, as required by the assignment. |
 
