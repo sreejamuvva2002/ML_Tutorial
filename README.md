@@ -15,7 +15,27 @@ Author: Sreeja Muvva.
 |---|---|
 | [`Fine_Tuning_LLMs_Tutorial.md`](Fine_Tuning_LLMs_Tutorial.md) | The written tutorial: concepts, code, interpretation, exercises |
 | [`finetuning_tutorial.ipynb`](finetuning_tutorial.ipynb) | The same code as an executable Colab/Jupyter notebook |
+| [`finetuning_tutorial_executed.ipynb`](finetuning_tutorial_executed.ipynb) | A complete run on a T4 with all outputs and the loss curve |
 | `requirements.txt` | Pinned dependencies for local (non-Colab) runs |
+
+## Results
+
+One full run on a free Colab T4 (2026-07-27, `unsloth 2026.7.5 / trl 0.24.0 / transformers 5.5.0`),
+written up in §11.5 of the tutorial:
+
+| | |
+|---|---|
+| LoRA trainable parameters | 18,464,768 (1.18%) — matches the §6.3 hand calculation exactly |
+| Peak VRAM | 4.06 GB of 15.6 GB |
+| Training time | 9.4 min (1,700 examples, 1 epoch, 213 steps) |
+| Best validation loss / perplexity | 1.0211 / 2.78 |
+| ROUGE-1 / 2 / L on held-out data | 0.525 / 0.306 / 0.401 |
+
+The interesting finding is negative: **fine-tuning did not improve the model and slightly degraded
+output formatting.** Qwen2.5-1.5B-Instruct is already instruction-tuned, and Alpaca is an older
+dataset distilled from a weaker teacher — so SFT taught a strong model to imitate a worse one. The
+loss fell while human-visible quality did not improve, which is the tutorial's own §10.3 warning
+demonstrated on real output. See §11.5 for the side-by-side evidence.
 
 The notebook's code cells are extracted verbatim from the written document, so the two cannot
 drift apart.
