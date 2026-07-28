@@ -44,6 +44,8 @@ Changed the experiment rather than the hyperparameters: added a deterministic co
 task with exact field-level gold answers, mixed with general Alpaca data, and evaluated **both**
 model conditions on untouched test splits. 5.1 min, peak 2.19 GB, validation loss 0.8013. Re-executed on a free Colab T4 in fp16: 8.9 min, peak 2.86 GB, validation loss 0.8014 — every conclusion replicates (§11.5).
 
+*The tables below show the canonical **A5000** numbers. The T4 replication matches within one record — e.g. challenge all-fields 0.542 vs 0.562 — see §11.5 for the side-by-side.*
+
 **In-distribution structured test (n=60)**
 
 | Metric | Base | Tuned |

@@ -16,7 +16,8 @@ bf16). Both reach the same conclusions; see §11.5 of the tutorial for the side-
 
 ## Provenance / what is missing
 These files were **reconstructed from the printed cell outputs** of the executed T4 notebook. The
-per-example prediction logs (`*_predictions.jsonl`) were written inside the Colab runtime and were
-not exported, so they are **not** reproduced here — the complete `results/a5000/` set has them, and
-the T4 predictions remain embedded as cell outputs in `finetuning_tutorial_executed_run2_t4.ipynb`.
-Aggregate numbers here are copied verbatim from the notebook's printed JSON, not re-estimated.
+per-example T4 prediction files (`*_predictions.jsonl`) were written inside the Colab runtime but
+were **not exported**, so they are not reproduced here. The executed notebook preserves the
+**aggregate** outputs (the printed metric blocks and the loss curve); the complete per-example
+prediction logs are available for the A5000 run under `results/a5000/`. Aggregate numbers here are
+copied verbatim from the notebook's printed JSON, not re-estimated.

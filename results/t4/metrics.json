@@ -1,5 +1,5 @@
 {
-  "_provenance": "Reconstructed from the printed cell outputs of finetuning_tutorial_executed_run2_t4.ipynb (executed on a Colab T4). The per-example prediction logs were written inside the Colab runtime and were not exported; they remain embedded in that executed notebook. Aggregate metrics below are copied verbatim from the notebook's printed JSON blocks.",
+  "_provenance": "Reconstructed from the printed cell outputs of finetuning_tutorial_executed_run2_t4.ipynb (executed on a Colab T4). The per-example T4 prediction files were written inside the Colab runtime but were not exported; the notebook preserves only the aggregate outputs. The complete per-example prediction logs are available for the A5000 run under results/a5000/. Aggregate metrics here are copied verbatim from the notebook's printed JSON blocks.",
   "training": {
     "runtime_minutes_reported": 8.9,
     "peak_reserved_vram_gb": 2.86,
