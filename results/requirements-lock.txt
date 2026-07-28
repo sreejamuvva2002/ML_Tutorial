@@ -1,0 +1,11 @@
+accelerate==1.12.0
+bitsandbytes==0.49.2
+datasets==4.3.0
+evaluate==0.4.6
+huggingface_hub==1.25.1
+peft==0.19.1
+rouge_score==0.1.2
+torch==2.10.0
+transformers==5.5.0
+trl==0.24.0
+unsloth==2026.7.5

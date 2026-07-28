@@ -17,7 +17,8 @@
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
 | `finetuning_tutorial.ipynb` | Runnable code | The full experiment: two datasets, base-vs-tuned evaluation, structured-JSON metrics, and the §11.6 challenge set |
-| `finetuning_tutorial_executed.ipynb` | Evidence | Run 1 with all outputs and the loss curve (§11.5) |
+| `finetuning_tutorial_executed.ipynb` | Evidence | The final run, fully executed, with all cell outputs, metrics, and the loss curve (§11.5–§11.6) |
+| `results/` | Evidence | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example base-vs-tuned prediction logs |
 | `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
 | `presentation.mp4` *(optional)* | Recording | ~10-minute walkthrough (see §15 for the outline) |
 
@@ -833,10 +834,10 @@ Because LoRA leaves the base weights untouched, you can toggle the adapter off a
 # Cell 9 — same weights, adapter on vs. off
 PROMPTS = [
     "Give three tips for writing clear code.",
-    "Summarize the water cycle in two sentences.",
-    "Convert this to a bulleted list: we need milk, eggs, and bread.",
+    "Summarize the water cycle in exactly two sentences.",
+    "Return a JSON object with keys item and quantity for: five notebooks.",
     "What is the capital of Australia?",
-    "Write a polite email declining a meeting invitation.",
+    raw_structured_test[0]["prompt_text"],   # a held-out structured record — the taught task
 ]
 
 for p in PROMPTS:
@@ -853,27 +854,29 @@ for p in PROMPTS:
 
 **Score these by hand.** For a class deliverable this manual table is stronger evidence than any automatic metric:
 
-Scored from **run 1** (Alpaca-only), recorded in §11.5.
+Scored by hand from the final run's `results/qualitative_comparison.jsonl`. Prompts 3 and 5 are
+formatting tasks (the behavior being taught); prompts 1, 2 and 4 are open-ended controls.
 
-> **The final notebook uses a different prompt set.** Rows 3 and 5 below no longer correspond
-> to anything the notebook runs: the bulleted-list and email prompts were replaced by
-> *"Return a JSON object with keys item and quantity for: five notebooks"* and a held-out
-> structured record, so the qualitative check exercises the task actually being taught. Rows 1,
-> 2 and 4 are unchanged. Re-score this table from the final run's
-> `results/qualitative_comparison.jsonl` — do not carry rows 3 and 5 forward.
+| # | Prompt | Followed instruction | Factually OK | Better than base? |
+|---|---|---|---|---|
+| 1 | Three tips for clear code | ✓ (both) | ✓ | **≈ no change** — both list three well-formed tips; tuned is slightly reworded, not better or worse |
+| 2 | Water cycle in exactly two sentences | ✓ (both) | ✓ | **= identical** — both produced the *same* two-sentence answer, verbatim |
+| 3 | Return a JSON object (item, quantity) | base ✗ / tuned ✓ | ✓ | **✓ better** — base wrapped it in a ` ```json ` fence with prose ("Here is the JSON object you requested…"); tuned returned bare `{"item": "notebooks", "quantity": 5}` |
+| 4 | Capital of Australia | ✓ (both) | ✓ | **= unchanged** — both answered Canberra |
+| 5 | Held-out company record → JSON | base ✗ / tuned ✓ | ✓ (both fields correct) | **✓ better** — the prompt says "Return JSON only—no markdown"; base still fenced it, tuned obeyed and emitted bare JSON with every field correct |
 
-| # | Prompt | Format | Followed instruction | Factually OK | Better than base? |
-|---|---|---|---|---|---|
-| 1 | Three tips for clear code | ✓ | ✓ | ✓ | **≈ no change** — same three points, tuned version wordier |
-| 2 | Water cycle in two sentences | ✓ | ✗ *(both produced one sentence)* | ✓ | **≈ no change** |
-| 3 | Convert to a bulleted list | ✓ | ✓ | ✓ | **✗ worse** — base gave `- Milk`; tuned gave `- We need milk.` |
-| 4 | Capital of Australia | ✓ | ✓ | ✓ | **= unchanged** — both answered Canberra |
-| 5 | Polite email declining | ✓ | ✓ | n/a | **✗ slightly worse** — base included a subject line; tuned dropped it and rambled |
+The pattern is consistent with §11.5: the fine-tune's visible effect is **format compliance on
+the taught task** (prompts 3 and 5), not a change in open-ended quality (prompts 1, 2, 4). On the
+two JSON prompts the base model's content is correct but it disobeys "JSON only" by adding
+markdown fences and prose; the tuned model strips both. Contrast this with run 1's Alpaca-only
+result (§11.5), where the tuned model was never clearly better and sometimes worse — because that
+run taught no specific task. Teaching a concrete output contract is what makes the qualitative
+difference show up.
 
-Note that prompt 2 is failed by *both* models, which is useful: it isolates a weakness of the base
-model that fine-tuning on this data did nothing to fix.
-
-Note prompt 4 deliberately tests a **fact**, not a behavior. If the fine-tuned model gets it right and the base model does too, fine-tuning neither helped nor hurt — which is the expected and correct result, and it reinforces §3: fine-tuning is not a knowledge-injection tool.
+Note prompt 2 is answered *identically* by both models — a useful control: it shows the adapter
+left an unrelated capability untouched rather than perturbing it. Prompt 4 deliberately tests a
+**fact**, not a behavior; both get Canberra, reinforcing §3 — fine-tuning is not a
+knowledge-injection tool.
 
 ### 11.3 Cell 10 — an automatic metric
 
@@ -902,15 +905,20 @@ Fine-tuning can degrade general ability while improving your target task. To che
 
 ### 11.5 Results from actual runs
 
-Two experiments were run on a free Colab T4. Read them together — the pair is the finding.
+Two experiments are reported. Read them together — the pair is the finding. Run 1 is the
+earlier Alpaca-only experiment (the negative result). Run 2 is the final experiment produced by
+the accompanying notebook, and the numbers below come from that complete, executed run.
 
-> **These are pilot numbers, pending one final run.** The notebook has since been hardened in
-> ways that change what is measured: the Alpaca ROUGE sample went from 25 to 100 examples, the
-> challenge set from 24 to 48, and a `strict_json_only_rate` metric was added. The
-> in-distribution structured results should be stable — training data is bit-identical — but
-> **the ROUGE and challenge figures below will move**, and the tables must be regenerated from
-> the final clean run rather than carried over. Numbers that are expected to hold are marked
-> *stable*; numbers that will change are marked *supersede*.
+> **These are final numbers from a clean end-to-end run.** Run 2 and the §11.6 challenge tables
+> were regenerated from the executed notebook (`finetuning_tutorial_executed.ipynb`, all outputs
+> saved under `results/`): the Alpaca ROUGE sample is the full 100 examples, the challenge set
+> is 48 records, and the `strict_json_only_rate` metric is included.
+>
+> **Reference hardware.** The final run was executed on an **NVIDIA RTX A5000 (25 GB, Ampere,
+> compute 8.6)**, so it selects **bf16** per Cell 2's capability check. This does not change the
+> tutorial's "runs on a free T4" claim: peak VRAM was **2.19 GB**, leaving large headroom inside
+> a T4's 16 GB. A T4 would run the same code in fp16; expect its numbers to differ slightly from
+> the bf16 figures here, and its runtime to be longer.
 
 #### Run 1 — Alpaca only (2026-07-27)
 
@@ -928,9 +936,11 @@ Two experiments were run on a free Colab T4. Read them together — the pair is 
 `trl` and `transformers` resolved to **exactly** the ceilings §7.2 derives from Unsloth's
 metadata (0.24.0 and 5.5.0) — the version analysis confirming itself against a real resolver.
 
-**The result was negative.** Across the five prompts in §11.2 the fine-tuned model was never
-clearly better, was indistinguishable on three, and was worse on two — most visibly turning
-`- Milk` into `- We need milk.`
+**The result was negative.** Across five open-ended prompts (run 1's earlier prompt set, which
+included a bulleted-list task) the fine-tuned model was never clearly better, was
+indistinguishable on three, and was worse on two — most visibly turning `- Milk` into
+`- We need milk.` (The §11.2 table now shows run 2's prompt set, which exercises the JSON task
+run 2 actually teaches.)
 
 That is the experiment working. Qwen2.5-1.5B-**Instruct** is already instruction-tuned, and
 Alpaca is distilled from a weaker GPT-3-era teacher, so SFT taught a strong model to imitate a
@@ -946,41 +956,62 @@ Alpaca data. Both model conditions are evaluated on untouched test splits.
 
 | | |
 |---|---|
-| Data | 1,120 Alpaca + 480 structured (train); independent 10% validation and 10% test |
+| GPU / precision | NVIDIA RTX A5000, 25.3 GB, capability 8.6 → bf16 |
+| Libraries | unsloth 2026.7.5, trl 0.24.0, transformers 5.5.0, peft 0.19.1, torch 2.10.0+cu128 |
+| Data | 1,120 Alpaca + 480 structured = 1,600 train; independent 200 validation and 200 test |
 | Loss | `completion_only_loss=True` — assistant tokens only |
-| Runtime / peak VRAM | 8.8 min (200 steps) / 6.17 GB |
-| Best validation loss / perplexity | 0.7962 / 2.22 |
+| LoRA trainable parameters | 18,464,768 (1.1820%) — matches §6.3 exactly |
+| Runtime / peak VRAM | 5.1 min (200 steps) / 2.19 GB |
+| Best validation loss / perplexity | 0.8013 / 2.23 |
+
+![Training and validation loss](results/loss_curves.png)
+
+Training loss shows the expected batch-level jitter at effective batch size 8; validation loss
+falls monotonically across all four checkpoints (0.807 → 0.801) and is lowest at the final step,
+so `load_best_model_at_end` restored the step-200 checkpoint. The near-flat validation curve is
+the honest signal here: one epoch on a strong instruct model moves validation loss very little,
+and the task-level metrics below — not the loss delta — are where the fine-tune shows up.
 
 **Structured JSON, 60 held-out examples**
 
-*Stable — training data is bit-identical across runs.*
-
 | Metric | Base | Tuned | Δ |
 |---|---|---|---|
-| `all_fields_exact_rate` | 0.717 | 1.000 | **+0.283** |
-| `city_accuracy` | 0.783 | 1.000 | +0.217 |
-| `supply_chain_role_accuracy` | 0.933 | 1.000 | +0.067 |
+| `strict_json_only_rate` | 0.000 | 1.000 | **+1.000** |
+| `all_fields_exact_rate` | 0.750 | 1.000 | **+0.250** |
+| `city_accuracy` | 0.800 | 1.000 | +0.200 |
+| `employee_count_accuracy` | 0.967 | 1.000 | +0.033 |
+| `supply_chain_role_accuracy` | 0.967 | 1.000 | +0.033 |
 | `exact_key_order_rate` | 0.950 | 1.000 | +0.050 |
 | `valid_json_rate` | 1.000 | 1.000 | 0.000 |
 
-Note that `valid_json_rate` is *not* the headline: the base model already produced valid JSON
-every time. The gains are in field-level correctness and key ordering.
+Note that `valid_json_rate` is *not* the headline: the base model already produced parseable JSON
+every time (once markdown fences and prose are stripped). The two results that matter are
+`strict_json_only_rate` and `all_fields_exact_rate`. The base model **never** returned bare JSON —
+it wrapped every answer in ` ```json … ``` ` fences or explanatory prose, so its
+`strict_json_only_rate` is 0.000 even though its content is recoverable. The fine-tune's single
+largest effect is teaching the model to obey "Return JSON only": 0.000 → 1.000. Field-level
+correctness and key ordering improve on top of that.
 
-**Held-out Alpaca ROUGE, base vs. tuned** *(supersede: n=25 here, n=100 in the final run)*
+**Held-out Alpaca ROUGE, base vs. tuned** *(n = 100 held-out examples, generated twice — once per model condition)*
 
 | Metric | Base | Tuned | Δ |
 |---|---|---|---|
-| ROUGE-1 | 0.374 | 0.408 | +0.034 |
-| ROUGE-2 | 0.119 | 0.137 | +0.019 |
-| ROUGE-L | 0.233 | 0.250 | +0.017 |
+| ROUGE-1 | 0.412 | 0.455 | +0.043 |
+| ROUGE-2 | 0.179 | 0.217 | +0.038 |
+| ROUGE-L | 0.286 | 0.333 | +0.047 |
 
-> **A measured noise floor.** Run 2 was executed twice from the same seed. Training was
-> bit-identical — best validation loss 0.7962 at step 200 both times — and the *base* model's
-> ROUGE was identical to 16 decimal places. The *tuned* model's ROUGE-1 was not: 0.4010 the
-> first time, 0.4084 the second. Greedy decoding through the adapter is not bit-reproducible
-> on this stack, so roughly **±0.007 ROUGE-1** is this setup's run-to-run wobble. The +0.034
-> delta above is about five times that, so it survives; a delta of 0.01 would not have. Report
-> a noise floor whenever you report a small metric difference.
+Every ROUGE delta is positive: on data the model never trained on, the fine-tune did **not**
+degrade surface overlap with the reference answers — it modestly improved it. This is a
+no-regression result on general instruction-following, not evidence of a large capability gain.
+
+> **A measured noise floor.** An earlier repeat of this experiment from the same seed established
+> the run-to-run wobble directly: training was bit-identical (same best validation loss at step
+> 200 both times) and the *base* model's ROUGE matched to 16 decimal places, but the *tuned*
+> model's ROUGE-1 did not — greedy decoding through the adapter is not bit-reproducible on this
+> stack, giving roughly **±0.007 ROUGE-1** of jitter. The +0.043 delta above is about six times
+> that floor, so it survives; a delta of 0.01 would not have. This final run was executed once,
+> so treat the deltas as point estimates above a known ±0.007 floor. Report a noise floor
+> whenever you report a small metric difference.
 
 #### What these numbers do and do not establish
 
@@ -1035,44 +1066,73 @@ A small gap indicates the adapter learned to extract fields; a large gap indicat
 the four training templates. Either outcome is publishable in a write-up; only the
 in-distribution number alone is not.
 
-#### Pilot results — 24 records *(supersede: the final run uses 48)*
+#### Final results — 48 records
 
 | Metric | Base | Tuned | Δ |
 |---|---|---|---|
-| `all_fields_exact_rate` | 0.458 | **0.667** | +0.208 |
-| `supply_chain_role_accuracy` | 0.500 | 0.667 | +0.167 |
-| `city_accuracy` | 0.833 | 1.000 | +0.167 |
+| `strict_json_only_rate` | 0.000 | **1.000** | +1.000 |
+| `all_fields_exact_rate` | 0.438 | **0.562** | +0.125 |
+| `supply_chain_role_accuracy` | 0.458 | 0.583 | +0.125 |
+| `city_accuracy` | 0.854 | 0.958 | +0.104 |
 | `company_name_accuracy` | 1.000 | 1.000 | 0.000 |
 | `employee_count_accuracy` | 1.000 | 1.000 | 0.000 |
 | `iso_9001_accuracy` | 1.000 | 1.000 | 0.000 |
 | `valid_json_rate` | 1.000 | 1.000 | 0.000 |
 | `exact_key_order_rate` | 1.000 | 1.000 | 0.000 |
 
-**The generalisation gap is 0.333** — the tuned model scores 1.000 in-distribution and 0.667
+95% Wilson intervals (n=48): base `all_fields_exact_rate` **0.438 [0.307, 0.577]**, tuned
+**0.562 [0.423, 0.693]** — the intervals overlap, so the +0.125 out-of-distribution gain is a
+direction, not a settled quantity. The `strict_json_only_rate` jump (0 → 1.000) is the one
+unambiguous effect: as in-distribution, the base model never emits bare JSON on these records
+and the tuned model always does.
+
+**The generalisation gap is 0.438** — the tuned model scores 1.000 in-distribution and 0.562
 on the challenge set. Three things follow, and the third is the one most write-ups would miss.
 
 **1. The adapter learned more than the four templates.** It beats the base model on
-out-of-distribution records by +0.208 exact-match. Had it merely memorised template slot
-positions, it would have collapsed toward the base model on unseen formats. It did not.
+out-of-distribution records by +0.125 exact-match. Had it merely memorised template slot
+positions, it would have collapsed toward the base model on unseen formats. It did not — though
+with overlapping confidence intervals (above), read this as direction, not a precise size.
 
-**2. But a third of the in-distribution score does not transfer.** The perfect 1.000 in §11.5
-substantially overstates what the adapter can do on records it has not seen the shape of.
-Reporting that number alone would have been misleading — which is the entire reason this
-section exists.
+**2. But nearly half of the in-distribution score does not transfer.** The perfect 1.000 in
+§11.5 drops to 0.562 on records whose *shape* the adapter has not seen. That number alone
+substantially overstates what the adapter can do out of distribution — which is the entire
+reason this section exists.
 
 **3. Some of the gap is the task getting harder, not the adapter overfitting.** The base model
-also drops on the challenge set, from 0.717 to 0.458 — a fall of 0.259 without any fine-tuning
+also drops on the challenge set, from 0.750 to 0.438 — a fall of 0.312 without any fine-tuning
 involved. So the challenge records are intrinsically harder for both conditions, and only the
-*difference* between the two drops (0.333 versus 0.259) is attributable to the adapter being
-more template-dependent than the base model. That residual is small. A write-up that reported
-the 0.333 gap as pure overfitting would be wrong; the base-model arm is what makes this
+*excess* of the tuned drop over the base drop (0.438 versus 0.312, i.e. **0.125**) is
+attributable to the adapter being more template-dependent than the base model. A write-up that
+reported the 0.438 gap as pure overfitting would be wrong; the base-model arm is what makes this
 distinguishable, and it is the reason both conditions must always be evaluated.
 
-**Where the failures are.** Every single out-of-distribution error is a `supply_chain_role`
-error. The tuned model scored 1.000 on company name, city, employee count, and ISO status, and
-0.667 on role — and `all_fields_exact_rate` is also exactly 0.667, so the 8 failing records are
-precisely the 8 with a wrong role. That is a sharp, actionable diagnosis rather than a diffuse
-"it got worse".
+**The gain is concentrated in one template, not spread evenly.** Per-template
+`all_fields_exact_rate` on the 8 records of each format tells a sharper story than the aggregate:
+
+| Template | Base | Tuned |
+|---|---|---|
+| prose | 1.000 | 1.000 |
+| memo | 1.000 | 1.000 |
+| qa | 0.125 | **0.875** |
+| pipe | 0.250 | 0.250 |
+| dossier | 0.250 | 0.250 |
+| bullets | 0.000 | 0.000 |
+
+The entire out-of-distribution improvement comes from the **qa** format (0.125 → 0.875). Prose
+and memo were already solved by *both* models; `pipe`, `dossier`, and `bullets` did not move at
+all, and `bullets` fails completely for both conditions. So "the adapter generalises" is too
+coarse: it generalises to one unfamiliar layout and not to three others. The aggregate +0.125
+is an average over a spiky distribution, which is exactly why the per-template and interval
+views belong in the report.
+
+**Where the failures are.** The failures are dominated by one field: of the 21 tuned records
+that miss `all_fields_exact`, **20 have a wrong `supply_chain_role`**. The tuned model scored
+1.000 on company name, employee count, and ISO status, 0.958 on city (2 errors, down from the
+base model's 7), and 0.583 on role. `role_accuracy` (0.583) and `all_fields_exact_rate` (0.562)
+differ by just one record — a single case where the role is right but the city is wrong — so to
+a first approximation, *fixing role would fix the challenge set*. That is a sharp, actionable
+diagnosis rather than a diffuse "it got worse".
 
 Note what separates that field from the others: company name, city, and headcount are **literal
 spans** to copy out of the record, while `supply_chain_role` is a **closed-set label** the model
@@ -1082,10 +1142,10 @@ suggested by the metrics, not something they establish. Confirming it means read
 `results/challenge_tuned_predictions.jsonl` to see whether the wrong roles are, for example,
 inferred from the product name rather than the stated role. Exercise 10 pursues this.
 
-> **Scope.** 24 challenge records and 60 in-distribution records, one model, one seed. These
-> are small-sample estimates; a ±1 example change moves `all_fields_exact_rate` by 0.042 on the
-> challenge set. Treat the gap as an indication of direction and rough magnitude, not a precise
-> quantity.
+> **Scope.** 48 challenge records and 60 in-distribution records, one model, one seed. These
+> are small-sample estimates; a ±1 example change moves `all_fields_exact_rate` by 0.021 on the
+> challenge set, and the 95% intervals above overlap. Treat the gap as an indication of
+> direction and rough magnitude, not a precise quantity.
 
 ---
 

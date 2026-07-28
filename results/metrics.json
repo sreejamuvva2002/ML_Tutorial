@@ -1,0 +1,140 @@
+{
+  "training": {
+    "runtime_seconds": 308.2258,
+    "peak_reserved_vram_gb": 2.185232384,
+    "optimizer_steps": 200,
+    "best_validation_loss": 0.8013393878936768,
+    "best_validation_step": 200,
+    "validation_perplexity": 2.228523788226153,
+    "train_examples": 1600,
+    "validation_examples": 200,
+    "epochs": 1,
+    "hyperparameters": {
+      "max_sequence_length": 1024,
+      "per_device_train_batch_size": 2,
+      "gradient_accumulation_steps": 4,
+      "effective_batch_size": 8,
+      "learning_rate": 0.0002,
+      "scheduler": "cosine",
+      "warmup_steps": 6,
+      "weight_decay": 0.01,
+      "max_grad_norm": 1.0,
+      "optimizer": "paged_adamw_8bit",
+      "completion_only_loss": true,
+      "packing": false,
+      "seed": 3407
+    },
+    "lora": {
+      "rank": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "bias": "none",
+      "use_rslora": false,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    }
+  },
+  "alpaca_rouge": {
+    "test_examples": 100,
+    "base": {
+      "rouge1": 0.41151146543214967,
+      "rouge2": 0.178725902615469,
+      "rougeL": 0.28570829171294365,
+      "rougeLsum": 0.36028155854842586
+    },
+    "tuned": {
+      "rouge1": 0.45490954143684,
+      "rouge2": 0.21703991772267622,
+      "rougeL": 0.3326264637533971,
+      "rougeLsum": 0.39874614889281457
+    },
+    "delta": {
+      "rouge1": 0.04339807600469031,
+      "rouge2": 0.03831401510720722,
+      "rougeL": 0.046918172040453454,
+      "rougeLsum": 0.038464590344388705
+    }
+  },
+  "structured_json": {
+    "test_examples": 60,
+    "base": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 0.0,
+      "exact_key_order_rate": 0.95,
+      "all_fields_exact_rate": 0.75,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.8,
+      "employee_count_accuracy": 0.9666666666666667,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.9666666666666667
+    },
+    "tuned": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 1.0,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 1.0,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 1.0
+    },
+    "delta": {
+      "valid_json_rate": 0.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 0.050000000000000044,
+      "all_fields_exact_rate": 0.25,
+      "company_name_accuracy": 0.0,
+      "city_accuracy": 0.19999999999999996,
+      "employee_count_accuracy": 0.033333333333333326,
+      "iso_9001_accuracy": 0.0,
+      "supply_chain_role_accuracy": 0.033333333333333326
+    }
+  },
+  "structured_json_challenge": {
+    "test_examples": 48,
+    "base": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 0.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 0.4375,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.8541666666666666,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.4583333333333333
+    },
+    "tuned": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 0.5625,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.9583333333333334,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.5833333333333334
+    },
+    "delta": {
+      "valid_json_rate": 0.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 0.0,
+      "all_fields_exact_rate": 0.125,
+      "company_name_accuracy": 0.0,
+      "city_accuracy": 0.10416666666666674,
+      "employee_count_accuracy": 0.0,
+      "iso_9001_accuracy": 0.0,
+      "supply_chain_role_accuracy": 0.12500000000000006
+    },
+    "generalisation_gap_base": 0.3125,
+    "generalisation_gap_tuned": 0.4375,
+    "challenge_gain_tuned_over_base": 0.125
+  }
+}
