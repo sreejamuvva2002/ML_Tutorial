@@ -31,11 +31,33 @@ written up in §11.5 of the tutorial:
 | Best validation loss / perplexity | 1.0211 / 2.78 |
 | ROUGE-1 / 2 / L on held-out data | 0.525 / 0.306 / 0.401 |
 
-The interesting finding is negative: **fine-tuning did not improve the model and slightly degraded
-output formatting.** Qwen2.5-1.5B-Instruct is already instruction-tuned, and Alpaca is an older
-dataset distilled from a weaker teacher — so SFT taught a strong model to imitate a worse one. The
-loss fell while human-visible quality did not improve, which is the tutorial's own §10.3 warning
-demonstrated on real output. See §11.5 for the side-by-side evidence.
+The finding was negative: **fine-tuning did not improve the model and slightly degraded output
+formatting.** Qwen2.5-1.5B-Instruct is already instruction-tuned, and Alpaca is an older dataset
+distilled from a weaker teacher — so SFT taught a strong model to imitate a worse one. The loss
+fell while human-visible quality did not improve, which is the tutorial's own §10.3 warning
+demonstrated on real output.
+
+**Run 2 — structured task with general replay**
+
+Run 2 changed the experiment rather than the hyperparameters, adding a deterministic
+company-record → JSON task with exact gold answers and evaluating *both* model conditions:
+
+| Metric (60 held-out) | Base | Tuned |
+|---|---|---|
+| All fields exactly correct | 0.717 | 1.000 |
+| City accuracy | 0.783 | 1.000 |
+| Held-out Alpaca ROUGE-1 | 0.374 | 0.401 |
+
+Together the two runs make the point: fine-tuning did nothing when there was no clearly defined
+missing capability, and produced a large, exactly-measurable gain once there was one.
+
+**Scope of these claims.** A perfect score on 60 examples is perfect performance on those 60
+examples, not a solved task — which is why the notebook now includes an out-of-distribution
+challenge set (§11.6) whose in-distribution-minus-challenge gap separates genuine extraction from
+template memorisation. The modest ROUGE change shows no degradation appeared on the sampled data;
+it is not evidence that general capability was preserved, and the replay/no-replay ablation needed
+to establish causation has not been run. See §11.5 for the full list of what these numbers do and
+do not support.
 
 The notebook's code cells are extracted verbatim from the written document, so the two cannot
 drift apart.
