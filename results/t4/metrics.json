@@ -1,0 +1,164 @@
+{
+  "_provenance": "Reconstructed from the printed cell outputs of finetuning_tutorial_executed_run2_t4.ipynb (executed on a Colab T4). The per-example prediction logs were written inside the Colab runtime and were not exported; they remain embedded in that executed notebook. Aggregate metrics below are copied verbatim from the notebook's printed JSON blocks.",
+  "training": {
+    "runtime_minutes_reported": 8.9,
+    "peak_reserved_vram_gb": 2.86,
+    "optimizer_steps": 200,
+    "validation_checks": 4,
+    "best_validation_loss": 0.8014,
+    "best_validation_step": 200,
+    "validation_perplexity": 2.23,
+    "train_examples": 1600,
+    "validation_examples": 200,
+    "epochs": 1,
+    "trainable_params": 18464768,
+    "trainable_pct": 1.182,
+    "hyperparameters": {
+      "max_sequence_length": 1024,
+      "per_device_train_batch_size": 2,
+      "gradient_accumulation_steps": 4,
+      "effective_batch_size": 8,
+      "learning_rate": 0.0002,
+      "scheduler": "cosine",
+      "weight_decay": 0.01,
+      "max_grad_norm": 1.0,
+      "optimizer": "paged_adamw_8bit",
+      "completion_only_loss": true,
+      "packing": false,
+      "seed": 3407
+    },
+    "lora": {
+      "rank": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "bias": "none",
+      "use_rslora": false,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    }
+  },
+  "alpaca_rouge": {
+    "test_examples": 100,
+    "base": {
+      "rouge1": 0.4092122960027327,
+      "rouge2": 0.17948827932869815,
+      "rougeL": 0.28374066996876324,
+      "rougeLsum": 0.3601338539680211
+    },
+    "tuned": {
+      "rouge1": 0.46156018125836473,
+      "rouge2": 0.22132149396267667,
+      "rougeL": 0.33404517014688095,
+      "rougeLsum": 0.40417023835770477
+    },
+    "delta": {
+      "rouge1": 0.052347885255632054,
+      "rouge2": 0.041833214633978516,
+      "rougeL": 0.05030450017811772,
+      "rougeLsum": 0.04403638438968366
+    }
+  },
+  "structured_json": {
+    "test_examples": 60,
+    "base": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 0.0,
+      "exact_key_order_rate": 0.95,
+      "all_fields_exact_rate": 0.75,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.8,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.95
+    },
+    "tuned": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 1.0,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 1.0,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 1.0
+    },
+    "delta": {
+      "valid_json_rate": 0.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 0.05,
+      "all_fields_exact_rate": 0.25,
+      "company_name_accuracy": 0.0,
+      "city_accuracy": 0.2,
+      "employee_count_accuracy": 0.0,
+      "iso_9001_accuracy": 0.0,
+      "supply_chain_role_accuracy": 0.05
+    }
+  },
+  "structured_json_challenge": {
+    "test_examples": 48,
+    "base": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 0.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 0.4375,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.8541666666666666,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.4583333333333333
+    },
+    "tuned": {
+      "valid_json_rate": 1.0,
+      "strict_json_only_rate": 1.0,
+      "exact_key_order_rate": 1.0,
+      "all_fields_exact_rate": 0.5416666666666666,
+      "company_name_accuracy": 1.0,
+      "city_accuracy": 0.9375,
+      "employee_count_accuracy": 1.0,
+      "iso_9001_accuracy": 1.0,
+      "supply_chain_role_accuracy": 0.5625
+    },
+    "delta": {
+      "all_fields_exact_rate": 0.10416666666666663,
+      "city_accuracy": 0.08333333333333337,
+      "supply_chain_role_accuracy": 0.10416666666666663,
+      "strict_json_only_rate": 1.0
+    },
+    "per_template_all_fields": {
+      "prose": {
+        "base": 1.0,
+        "tuned": 1.0
+      },
+      "memo": {
+        "base": 1.0,
+        "tuned": 1.0
+      },
+      "bullets": {
+        "base": 0.0,
+        "tuned": 0.0
+      },
+      "pipe": {
+        "base": 0.25,
+        "tuned": 0.25
+      },
+      "qa": {
+        "base": 0.125,
+        "tuned": 0.875
+      },
+      "dossier": {
+        "base": 0.25,
+        "tuned": 0.125
+      }
+    },
+    "generalisation_gap_base": 0.3125,
+    "generalisation_gap_tuned": 0.4583333333333333,
+    "challenge_gain_tuned_over_base": 0.10416666666666663
+  }
+}

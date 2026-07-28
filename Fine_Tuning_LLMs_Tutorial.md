@@ -7,7 +7,6 @@
 | **Author** | Sreeja Muvva |
 | **Course / Section** | ARTI 4555/6555 (graduate section) |
 | **Program** | MS in Artificial Intelligence |
-| **Instructor** | Sreeja Muvva |
 | **Date** | 2026-07-27 |
 | **Work statement** | Completed individually, as required by the assignment. |
 
@@ -17,12 +16,12 @@
 |---|---|---|
 | `Fine_Tuning_LLMs_Tutorial.md` (this file) | Written document | Complete tutorial: concepts, code, interpretation, exercises |
 | `finetuning_tutorial.ipynb` | Runnable code | The full experiment: two datasets, base-vs-tuned evaluation, structured-JSON metrics, and the §11.6 challenge set |
-| `finetuning_tutorial_executed_run2.ipynb` | Evidence | The final run on an RTX A5000, fully executed; its outputs are the files in `results/` |
-| `finetuning_tutorial_executed_run2_t4.ipynb` | Evidence | The same notebook re-executed on a free Colab T4 — the replication in §11.5 |
+| `finetuning_tutorial_executed_run2.ipynb` | Evidence | The final run on an RTX A5000, fully executed; its outputs are the files in `results/a5000/` |
+| `finetuning_tutorial_executed_run2_t4.ipynb` | Evidence | A cross-environment replication on a free Colab T4 (matches the shipped notebook's loader). Same dataset, seed, training config, and evaluation design; different model-loading path and software/GPU stack — see §11.5 |
 | `finetuning_tutorial_executed_run1.ipynb` | Evidence | The earlier Alpaca-only run on a T4 — the negative result reported as Run 1 in §11.5. Preserved as-run, including the `trainer.evaluate()` failure documented in §13.2 that prompted the Cell 7 rewrite |
-| `results/` | Evidence | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example base-vs-tuned prediction logs |
-| `requirements.txt` | Environment | Pinned dependencies for local (non-Colab) runs |
-| `presentation.mp4` *(optional)* | Recording | ~10-minute walkthrough (see §15 for the outline) |
+| `results/a5000/` | Evidence | Full A5000 evidence: `metrics.json`, `loss_curves.png`, `environment.json`, `requirements-lock.txt`, and per-example base-vs-tuned prediction logs |
+| `results/t4/` | Evidence | Aggregate T4 evidence (matches the shipped notebook): `metrics.json`, `loss_curves.png`, `environment.json` — see `results/t4/README.md` |
+| `requirements.txt` | Environment | Compatibility requirements for local (non-Colab) runs; the exact executed versions are in `results/a5000/requirements-lock.txt` |
 
 > **Everything here runs on a single free Google Colab T4 GPU (16 GB).** No paid compute, no API keys, no private data.
 
@@ -200,7 +199,7 @@ where for a weight matrix `W ∈ ℝ^(d_out × d_in)`:
 
 Trainable parameters per adapted matrix: `r · (d_in + d_out)` instead of `d_in · d_out`. When `r` is small, that is a dramatic reduction (§6 works the numbers).
 
-- **Cheaper, faster, and forgets less** — the base model is untouched, so its general abilities survive.
+- **Cheaper, faster, and forgets less** — the base model is untouched, so freezing its parameters generally reduces forgetting risk (though an adapter can still alter or degrade behaviour).
 - Slightly less capacity than full fine-tuning for jobs requiring large amounts of genuinely new knowledge.
 - Key knobs: **rank `r`** (capacity) and **`alpha`** (update scale; a common default is `α = 2r`).
 - Adapters are **composable and portable**: a few megabytes on disk, swappable at inference, and you can keep several task adapters for one base model.
@@ -350,7 +349,7 @@ The SFT ecosystem has changed its API several times. Three things that appear in
 
 A large share of the SFT code currently on the open web still ships the retired signature. If you paste it, you get a `TypeError` on the first line of your training setup.
 
-**The subtler trap: "latest" is not the version you want.** As of July 2026 the newest TRL on PyPI is **0.29.1** — but Unsloth's package metadata requires `trl>=0.18.2,<=0.24.0`. Installing the latest TRL gives you a resolver conflict or, worse, an environment that imports but misbehaves. The same applies to `transformers`: the latest is 5.14.1, while Unsloth supports `<=5.5.0`.
+**The subtler trap: "latest" is not the version you want.** New TRL and Transformers releases keep shipping — by mid-2026 TRL has moved onto its **1.x** line and `transformers` is well past 5.5 — but Unsloth's package metadata requires `trl>=0.18.2,<=0.24.0` and `transformers<=5.5.0`. Installing the latest of either produces a resolver conflict or, worse, an environment that imports but misbehaves. This tutorial deliberately uses an older **tested** compatibility stack (`trl==0.24.0`, `transformers==5.5.0`) that sits inside Unsloth's supported window; newer releases exist on PyPI but are outside the environment validated here. Don't trust any single version number — including these — check the window yourself.
 
 So the version you want is not the newest one — it is the newest one **inside your training framework's supported window**. Discover that window rather than guessing at it:
 
@@ -445,7 +444,7 @@ assert V("0.20") <= V(trl.__version__) <= V("0.24.0"), (
 >   applied from the start
 > - **both model conditions evaluated** — base and tuned on identical prompts, so every metric
 >   has a baseline
-> - **pinned model and dataset revisions**, recorded in `results/environment.json`
+> - **pinned model and dataset revisions**, recorded in `results/a5000/environment.json`
 > - an **out-of-distribution challenge set** (§11.6)
 >
 > Read §8 to understand the mechanics; run the notebook to reproduce the results.
@@ -877,7 +876,7 @@ for p in PROMPTS:
 
 **Score these by hand.** For a class deliverable this manual table is stronger evidence than any automatic metric:
 
-Scored by hand from the final run's `results/qualitative_comparison.jsonl`. Prompts 3 and 5 are
+Scored by hand from the final run's `results/a5000/qualitative_comparison.jsonl`. Prompts 3 and 5 are
 formatting tasks (the behavior being taught); prompts 1, 2 and 4 are open-ended controls.
 
 | # | Prompt | Followed instruction | Factually OK | Better than base? |
@@ -904,6 +903,8 @@ knowledge-injection tool.
 ### 11.3 Cell 10 — an automatic metric
 
 Because Cell 4 split the dataset *before* formatting, `raw_eval` still has the original `instruction` / `input` / `output` columns — and the model has never seen any of it. Scoring against the head of the training set instead would inflate every number here.
+
+> **This shortened cell is illustrative — it is *not* the source of the reported results.** It scores only 25 examples and only the tuned model, to keep the teaching path minimal. The accompanying notebook does the real evaluation: an independent held-out test set, **both** base and tuned models, **100** examples, and a delta for every ROUGE metric (the numbers in §11.5 come from there, not from this cell).
 
 ```python
 # Cell 10 — ROUGE against HELD-OUT references (data the model never trained on)
@@ -934,16 +935,18 @@ the accompanying notebook, and the numbers below come from that complete, execut
 
 > **These are final numbers from a clean end-to-end run.** Run 2 and the §11.6 challenge tables
 > were regenerated from the executed notebook (`finetuning_tutorial_executed_run2.ipynb`, all outputs
-> saved under `results/`): the Alpaca ROUGE sample is the full 100 examples, the challenge set
+> saved under `results/a5000/`): the Alpaca ROUGE sample is the full 100 examples, the challenge set
 > is 48 records, and the `strict_json_only_rate` metric is included.
 >
 > **Reference hardware.** The final run was executed on an **NVIDIA RTX A5000 (25 GB, Ampere,
 > compute 8.6)**, so it selects **bf16** per Cell 2's capability check. A T4 would run the same
 > code in fp16; expect its numbers to differ, and its runtime to be longer.
 >
-> **The T4 claim rests on a direct T4 measurement.** The identical notebook was then executed on
-> a free Colab T4 in fp16, peaking at **2.86 GB** in **8.9 min** — comfortably inside 16 GB. The
-> two runs also replicate each other (below), which is stronger evidence than either alone.
+> **The T4 claim rests on a direct T4 measurement.** The experiment was then re-executed on a free
+> Colab T4 in fp16 — using the *shipped* notebook's loader
+> (`unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit`) rather than the A5000 run's original-repo path —
+> peaking at **2.86 GB** in **8.9 min**, comfortably inside 16 GB. The two runs also replicate
+> each other (below), which is stronger evidence than either alone.
 
 #### Run 1 — Alpaca only (2026-07-27)
 
@@ -989,7 +992,7 @@ Alpaca data. Both model conditions are evaluated on untouched test splits.
 | Runtime / peak VRAM | 5.1 min (200 steps) / 2.19 GB |
 | Best validation loss / perplexity | 0.8013 / 2.23 |
 
-![Training and validation loss](results/loss_curves.png)
+![Training and validation loss](results/a5000/loss_curves.png)
 
 Training loss shows the expected batch-level jitter at effective batch size 8; validation loss
 falls monotonically across all four checkpoints (0.807 → 0.801) and is lowest at the final step,
@@ -1038,10 +1041,16 @@ no-regression result on general instruction-following, not evidence of a large c
 > so treat the deltas as point estimates above a known ±0.007 floor. Report a noise floor
 > whenever you report a small metric difference.
 
-#### Replication: the same notebook on a Tesla T4
+#### Replication: a cross-environment run on a Tesla T4
 
-Run 2 was executed twice — once on an RTX A5000 in bf16, once on a free Colab T4 in fp16. Same
-code, same seed, different hardware and different precision.
+Run 2 was executed twice — once on an RTX A5000 in bf16, once on a free Colab T4 in fp16. This is a
+**cross-environment** replication, not a bit-for-bit one: both runs share the same dataset, seed,
+training configuration, and evaluation design, but differ in the **model-loading path** (A5000:
+`unsloth/Qwen2.5-1.5B-Instruct` + `use_exact_model_name=True`, quantised locally; T4: the shipped
+`unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit`, pre-quantised) and in the **software/GPU stack** (Python
+3.13 / torch 2.10 / A5000 / bf16 versus Python 3.12 / torch 2.11 / T4 / fp16). The T4 run is the
+one that matches the distributed notebook. That the conclusions survive these differences is
+*stronger* evidence than a bit-identical re-run would be.
 
 | | A5000 / bf16 | T4 / fp16 |
 |---|---|---|
@@ -1194,7 +1203,7 @@ spans** to copy out of the record, while `supply_chain_role` is a **closed-set l
 must select. The results are consistent with the adapter having learned robust span extraction
 and less robust label classification under unfamiliar phrasing — but that is a hypothesis
 suggested by the metrics, not something they establish. Confirming it means reading
-`results/challenge_tuned_predictions.jsonl` to see whether the wrong roles are, for example,
+`results/a5000/challenge_tuned_predictions.jsonl` to see whether the wrong roles are, for example,
 inferred from the product name rather than the stated role. Exercise 10 pursues this.
 
 > **Scope.** 48 challenge records and 60 in-distribution records, one model, one seed. These
@@ -1269,7 +1278,7 @@ FastLanguageModel.for_inference(model)
 | `TypeError: ... unexpected keyword argument 'tokenizer'` | TRL ≥ 0.16 | Use `processing_class=` (Cell 5 handles this) |
 | `TypeError: ... 'max_seq_length'` | TRL ≥ 0.20 | Use `max_length=` in `SFTConfig` |
 | `TypeError: ... 'dataset_text_field'` on `SFTTrainer` | Moved to config | Put it in `SFTConfig`, not the trainer |
-| `Unrecognized model in unsloth/...-bnb-4bit. Should have a model_type key in its config.json` | A pinned `revision=` combined with `load_in_4bit=True`: Unsloth silently redirects to its pre-quantised repo, and the SHA you resolved belongs to the *original* repo, so it does not exist there | Pass `use_exact_model_name=True` so the repo you pinned is the repo that loads (Cell 3 does this). Pinning a revision and accepting a silent repo substitution are incompatible |
+| `Unrecognized model in unsloth/...-bnb-4bit. Should have a model_type key in its config.json` | A pinned `revision=` combined with `load_in_4bit=True`: Unsloth silently redirects to its pre-quantised repo, and the SHA you resolved belongs to the *original* repo, so it does not exist there | Two valid fixes. **(1)** Keep the original repo and pass `use_exact_model_name=True` so the repo you pinned is the repo that loads. **(2)** Name the pre-quantised repo explicitly (`unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit`) and resolve `revision=` from *that* same repo, so the pin and the load are self-consistent — **this is what the shipped Cell 3 does**. Either way, pinning a revision while accepting a silent repo substitution is what breaks |
 | `ValueError: Your setup doesn't support bf16/gpu ... You need Ampere+ GPU` | You set `bf16=True` on a pre-Ampere GPU — most likely because `torch.cuda.is_bf16_supported()` counts *emulated* bf16 and returns `True` on a T4 | Gate on `torch.cuda.get_device_capability()[0] >= 8` instead (Cell 2 does this); see the precision-trap note in §7.4 |
 | `warmup_ratio is deprecated ... use warmup_steps` | transformers 5.x deprecation, removal in 5.2 | Pass `warmup_steps` (Cell 6 derives it as ~3% of total steps) |
 | `RuntimeError: on_train_begin must be called before on_evaluate` | `trainer.evaluate()` called standalone in a notebook *after* training ended; the progress-bar callback has already torn down its state | Don't re-evaluate — read `eval_loss` from `trainer.state.log_history` / `trainer.state.best_metric` (Cell 7 does this). The metric itself computes fine; only the display callback fails |
@@ -1450,6 +1459,8 @@ This two-line habit is more durable than any table, including this one.
 **Dataset.** `yahma/alpaca-cleaned` is a corrected version of the Stanford Alpaca dataset. The Alpaca lineage was generated using OpenAI model outputs and therefore carries usage restrictions inherited from that origin, typically non-commercial. Check the dataset card for current terms. For coursework this is fine; for anything you plan to ship, use a dataset with a clean commercial license.
 
 **Libraries.** Unsloth (Apache-2.0), Hugging Face `transformers` / `peft` / `trl` (Apache-2.0), `bitsandbytes` (MIT).
+
+**This repository.** The code (notebooks and scripts) is released under the **MIT License** (`LICENSE`). The written tutorial — this document and the other Markdown text — is released under **CC BY 4.0** (`LICENSE-CC-BY-4.0.txt`). The third-party model, dataset, and library terms above remain separate and are not superseded by these.
 
 **Reproducibility checklist for your own write-up:**
 

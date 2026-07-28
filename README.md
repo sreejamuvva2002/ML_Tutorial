@@ -15,11 +15,12 @@ Author: Sreeja Muvva.
 |---|---|
 | [`Fine_Tuning_LLMs_Tutorial.md`](Fine_Tuning_LLMs_Tutorial.md) | The written tutorial: concepts, code, interpretation, exercises |
 | [`finetuning_tutorial.ipynb`](finetuning_tutorial.ipynb) | The runnable experiment |
-| [`finetuning_tutorial_executed_run2.ipynb`](finetuning_tutorial_executed_run2.ipynb) | The final run on an RTX A5000, fully executed — source of `results/` |
-| [`finetuning_tutorial_executed_run2_t4.ipynb`](finetuning_tutorial_executed_run2_t4.ipynb) | The same notebook re-executed on a free Colab T4 (replication) |
+| [`finetuning_tutorial_executed_run2.ipynb`](finetuning_tutorial_executed_run2.ipynb) | The final run on an RTX A5000, fully executed — source of `results/a5000/` |
+| [`finetuning_tutorial_executed_run2_t4.ipynb`](finetuning_tutorial_executed_run2_t4.ipynb) | A cross-environment replication on a free Colab T4 — matches the shipped notebook's loader (§11.5) |
 | [`finetuning_tutorial_executed_run1.ipynb`](finetuning_tutorial_executed_run1.ipynb) | The earlier Alpaca-only run (the negative result) |
-| `results/` | `metrics.json`, `loss_curves.png`, `environment.json`, and per-example prediction logs |
-| `requirements.txt` | Pinned dependencies for local (non-Colab) runs |
+| `results/a5000/` | Full A5000 evidence: `metrics.json`, `loss_curves.png`, `environment.json`, `requirements-lock.txt`, and per-example prediction logs |
+| `results/t4/` | Aggregate T4 evidence (matches the shipped notebook) — see `results/t4/README.md` |
+| `requirements.txt` | Compatibility requirements for local (non-Colab) runs; the exact executed versions are in `results/a5000/requirements-lock.txt` |
 
 The written tutorial's §8 is a minimal teaching path; the notebook implements the stricter
 experiment the results come from. §8 states the differences explicitly.
@@ -65,9 +66,10 @@ cities and company names, distractor sentences, unfamiliar number and certificat
 
 ### What this does and does not show
 
-Fine-tuning did nothing when there was no clearly defined missing capability, and produced a large,
-exactly-measurable gain once there was one. But read the challenge set before concluding the task
-was solved:
+In this experiment, fine-tuning produced no clear measured improvement when there was no clearly
+defined missing capability (Run 1), and a large, exactly-measurable gain once there was one (Run 2).
+These are results from two runs on the selected evaluations, not a universal claim about
+fine-tuning. And read the challenge set before concluding the task was solved:
 
 - **A perfect in-distribution score is not a solved task.** The same adapter scores 1.000 on
   records drawn from the training templates and 0.562 on records whose *shape* it has not seen.
@@ -113,11 +115,12 @@ one-line ordering is worth more than 3 GB.
 
 Version drift is the single most common reason a fine-tuning tutorial fails to run.
 
-The subtlety, covered in §7.2: **"latest" is not the version you want.** As of July 2026 the newest
-TRL on PyPI is 0.29.1, but Unsloth's metadata requires `trl<=0.24.0`; likewise `transformers` is at
-5.14.1 while Unsloth supports `<=5.5.0`. Installing the latest of everything produces a resolver
-conflict or a subtly broken environment. The notebook pins inside Unsloth's supported window and
-asserts the resolved versions at startup.
+The subtlety, covered in §7.2: **"latest" is not the version you want.** Newer TRL and Transformers
+releases keep shipping (TRL has since moved onto its 1.x line, and `transformers` is well past 5.5),
+but Unsloth's metadata requires `trl<=0.24.0` and `transformers<=5.5.0`. Installing the latest of
+everything produces a resolver conflict or a subtly broken environment. This tutorial pins an older,
+**tested** stack inside Unsloth's supported window (`trl==0.24.0`, `transformers==5.5.0`) and asserts
+the resolved versions at startup; newer releases exist but are outside the validated environment.
 
 If you are reading this well after July 2026, re-derive the window rather than trusting the pins:
 
@@ -137,5 +140,8 @@ for r in requires("unsloth") or []:
   and inherits usage restrictions from that origin, typically non-commercial. Fine for coursework;
   use a cleanly licensed dataset for anything you ship.
 - **Libraries** — Unsloth, `transformers`, `peft`, `trl` (Apache-2.0); `bitsandbytes` (MIT).
+- **This repository** — the code (notebooks and scripts) is released under the **MIT License**
+  ([`LICENSE`](LICENSE)); the written tutorial text is released under **CC BY 4.0**
+  ([`LICENSE-CC-BY-4.0.txt`](LICENSE-CC-BY-4.0.txt)). Third-party terms above remain separate.
 
 See §19 of the tutorial for the full attribution and reproducibility checklist.

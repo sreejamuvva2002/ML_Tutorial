@@ -7,10 +7,13 @@
 # https://pytorch.org/get-started/locally/). Unsloth requires torch>=2.4.0,<2.12.0.
 #
 # The upper bounds below are NOT arbitrary and NOT "latest". They come from Unsloth's own
-# package metadata as of July 2026 — it declares support for trl<=0.24.0 and
-# transformers<=5.5.0, even though newer releases of both exist on PyPI (trl 0.29.1,
-# transformers 5.14.1). Installing the latest gives you a resolver conflict or a subtly
+# package metadata as of mid-2026 — it declares support for trl<=0.24.0 and transformers<=5.5.0,
+# even though newer releases of both exist on PyPI (TRL has since moved onto its 1.x line, and
+# transformers is well past 5.5). Installing the latest gives you a resolver conflict or a subtly
 # broken environment. See section 7.2 of the tutorial.
+#
+# These are COMPATIBILITY CONSTRAINTS, not exact pins. The exact versions actually executed for
+# the reported results are locked in results/a5000/requirements-lock.txt.
 #
 # Re-derive the window instead of trusting these pins:
 #   python -c "from importlib.metadata import requires; print(requires('unsloth'))"

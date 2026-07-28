@@ -1,0 +1,28 @@
+{
+  "_provenance": "Reconstructed from the printed cell outputs of finetuning_tutorial_executed_run2_t4.ipynb (executed on a Colab T4). The per-example prediction logs were written inside the Colab runtime and were not exported; they remain embedded in that executed notebook. Aggregate metrics below are copied verbatim from the notebook's printed JSON blocks.",
+  "python": "3.12.13",
+  "gpu": "Tesla T4",
+  "vram_gb": 15.6,
+  "compute_capability": [
+    7,
+    5
+  ],
+  "torch_version": "2.11.0+cu128",
+  "cuda_runtime": "12.8",
+  "bf16_supported": false,
+  "fp16_enabled": true,
+  "seed": 3407,
+  "model_id": "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+  "model_revision": "d2f2dd02b071701d5100a04a7a49d6fb0bd305b7",
+  "dataset_id": "yahma/alpaca-cleaned",
+  "dataset_revision": "12567cabf869d7c92e573c7c783905fc160e9639",
+  "max_sequence_length": 1024,
+  "packages": {
+    "torch": "2.11.0+cu128",
+    "unsloth": "2026.7.5",
+    "trl": "0.24.0",
+    "transformers": "5.5.0",
+    "peft": "0.19.1"
+  },
+  "packages_note": "Only the versions printed by Cell 1 are recorded; other package versions were not exported from the Colab runtime."
+}
