@@ -589,12 +589,24 @@ import math
 
 peak_gb = torch.cuda.max_memory_reserved() / 1e9
 runtime = trainer_stats.metrics["train_runtime"]
-final   = trainer.evaluate()
+
+# Read the eval loss out of the training log rather than calling trainer.evaluate() again.
+# Two reasons. (1) It was already computed during training, so re-running it costs time and
+# tells you nothing new. (2) In a notebook, calling evaluate() standalone AFTER training has
+# finished raises "RuntimeError: on_train_begin must be called before on_evaluate" — the
+# progress-bar callback tears down its state in on_train_end and then refuses the orphaned
+# on_evaluate. The metric is computed fine; only the display callback fails.
+evals = [h["eval_loss"] for h in trainer.state.log_history if "eval_loss" in h]
+
+# best_metric tracks metric_for_best_model, so it describes the checkpoint that
+# load_best_model_at_end actually restored — which is the model now sitting in memory.
+best = trainer.state.best_metric if trainer.state.best_metric is not None else min(evals)
 
 print(f"Runtime        : {runtime/60:.1f} min")
 print(f"Peak VRAM      : {peak_gb:.2f} GB of {vram:.1f} GB")
-print(f"Final eval loss: {final['eval_loss']:.4f}")
-print(f"Perplexity     : {math.exp(final['eval_loss']):.2f}")
+print(f"Evals recorded : {len(evals)}  (last {evals[-1]:.4f})")
+print(f"Best eval loss : {best:.4f}   <- the restored checkpoint")
+print(f"Perplexity     : {math.exp(best):.2f}")
 ```
 
 Compare the peak VRAM figure against your prediction from §6.2. Being able to forecast this within a gigabyte or so is a practical skill.
@@ -916,6 +928,7 @@ FastLanguageModel.for_inference(model)
 | `TypeError: ... 'dataset_text_field'` on `SFTTrainer` | Moved to config | Put it in `SFTConfig`, not the trainer |
 | `ValueError: Your setup doesn't support bf16/gpu ... You need Ampere+ GPU` | You set `bf16=True` on a pre-Ampere GPU — most likely because `torch.cuda.is_bf16_supported()` counts *emulated* bf16 and returns `True` on a T4 | Gate on `torch.cuda.get_device_capability()[0] >= 8` instead (Cell 2 does this); see the precision-trap note in §7.4 |
 | `warmup_ratio is deprecated ... use warmup_steps` | transformers 5.x deprecation, removal in 5.2 | Pass `warmup_steps` (Cell 6 derives it as ~3% of total steps) |
+| `RuntimeError: on_train_begin must be called before on_evaluate` | `trainer.evaluate()` called standalone in a notebook *after* training ended; the progress-bar callback has already torn down its state | Don't re-evaluate — read `eval_loss` from `trainer.state.log_history` / `trainer.state.best_metric` (Cell 7 does this). The metric itself computes fine; only the display callback fails |
 | `CUDA out of memory` | Batch/seq too large | Lower `per_device_train_batch_size` to 1, raise `gradient_accumulation_steps`, lower `max_length` to 1024, confirm gradient checkpointing is on |
 | Generation never stops | EOS token not learned or not set | Verify the template ends the assistant turn; set `eos_token_id` in `generate()` |
 | Output contains `<|im_start|>` literals | Template mismatch between train and inference | Use `apply_chat_template` with `add_generation_prompt=True` at inference |
